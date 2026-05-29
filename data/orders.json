@@ -1,0 +1,56 @@
+[
+  {
+    "orderId": "ORDER-1000",
+    "restaurant": "BotFlow Burger",
+    "customer": "∞𝓜𝓸𝓸𝓷∞",
+    "chatId": 7830338836,
+    "phone": "909140454",
+    "address": "Toshkent",
+    "items": [
+      {
+        "name": "🌯 Tovuqli Lavash",
+        "price": 30000
+      },
+      {
+        "name": "🧀 Cheese Burger",
+        "price": 38000
+      }
+    ],
+    "total": 68000,
+    "createdAt": "2026-05-29T03:46:55.046Z",
+    "status": "🚚 Buyurtmangiz yo‘lga chiqdi."
+  },
+  {
+    "orderId": "ORDER-1000",
+    "restaurant": "BotFlow Burger",
+    "customer": "∞𝓜𝓸𝓸𝓷∞",
+    "chatId": 7830338836,
+    "phone": "1",
+    "address": "1",
+    "items": [
+      {
+        "name": "🍔 Classic Burger",
+        "price": 32000
+      }
+    ],
+    "total": 32000,
+    "createdAt": "2026-05-29T03:58:07.374Z"
+  },
+  {
+    "orderId": "ORDER-1000",
+    "restaurant": "BotFlow Burger",
+    "customer": "∞𝓜𝓸𝓸𝓷∞",
+    "chatId": 7830338836,
+    "phone": "1",
+    "address": "1",
+    "items": [
+      {
+        "name": "🍔 Classic Burger",
+        "price": 32000
+      }
+    ],
+    "total": 32000,
+    "status": "Yangi",
+    "createdAt": "2026-05-29T04:02:23.078Z"
+  }
+]
