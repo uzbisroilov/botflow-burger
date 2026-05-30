@@ -7,20 +7,54 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const ORDERS_FILE = "./data/orders.json";
 
-const restaurant = {
-  name: "BotFlow Burger",
-  phone: "+998 90 777 70 70",
-  address: "Toshkent shahar, Chilonzor, Bunyodkor shoh ko‘chasi",
-  maps: "https://maps.google.com",
-};
+const restaurants = {
+  burger: {
+    id: "burger",
+    name: "🍔 BotFlow Burger",
+    phone: "+998 90 777 70 70",
+    address: "Toshkent shahar, Chilonzor, Bunyodkor shoh ko‘chasi",
+    maps: "https://maps.google.com",
+    menu: {
+      classic_burger: { name: "🍔 Classic Burger", price: 32000 },
+      cheese_burger: { name: "🧀 Cheese Burger", price: 38000 },
+      lavash: { name: "🌯 Tovuqli Lavash", price: 30000 },
+      hot_dog: { name: "🌭 Hot Dog", price: 22000 },
+      fries: { name: "🍟 Fri", price: 15000 },
+      cola: { name: "🥤 Cola", price: 10000 },
+    },
+  },
 
-const menu = {
-  classic_burger: { name: "🍔 Classic Burger", price: 32000 },
-  cheese_burger: { name: "🧀 Cheese Burger", price: 38000 },
-  lavash: { name: "🌯 Tovuqli Lavash", price: 30000 },
-  hot_dog: { name: "🌭 Hot Dog", price: 22000 },
-  fries: { name: "🍟 Fri", price: 15000 },
-  cola: { name: "🥤 Cola", price: 10000 },
+  sushi: {
+    id: "sushi",
+    name: "🍣 Sushi Master",
+    phone: "+998 90 555 55 55",
+    address: "Toshkent shahar, Yunusobod",
+    maps: "https://maps.google.com",
+    menu: {
+      california: { name: "🍣 California Roll", price: 48000 },
+      philadelphia: { name: "🍱 Philadelphia Roll", price: 55000 },
+      set_small: { name: "🍙 Mini Sushi Set", price: 89000 },
+      set_big: { name: "🍣 Big Sushi Set", price: 159000 },
+      soy: { name: "🥢 Soy Sauce", price: 5000 },
+      cola: { name: "🥤 Cola", price: 10000 },
+    },
+  },
+
+  coffee: {
+    id: "coffee",
+    name: "☕ Coffee Time",
+    phone: "+998 90 111 11 11",
+    address: "Toshkent shahar, Mirzo Ulug‘bek",
+    maps: "https://maps.google.com",
+    menu: {
+      americano: { name: "☕ Americano", price: 18000 },
+      cappuccino: { name: "🥛 Cappuccino", price: 24000 },
+      latte: { name: "☕ Latte", price: 26000 },
+      cheesecake: { name: "🍰 Cheesecake", price: 32000 },
+      croissant: { name: "🥐 Croissant", price: 22000 },
+      water: { name: "💧 Water", price: 6000 },
+    },
+  },
 };
 
 let orderCounter = 1000;
@@ -28,6 +62,7 @@ const sessions = {};
 
 async function ensureDataFile() {
   await fs.ensureDir("./data");
+
   if (!(await fs.pathExists(ORDERS_FILE))) {
     await fs.writeJson(ORDERS_FILE, [], { spaces: 2 });
   }
@@ -47,24 +82,47 @@ async function saveOrder(order) {
 async function updateOrderStatus(orderId, status) {
   const orders = await getOrders();
   const order = orders.find((o) => o.orderId === orderId);
-  if (order) order.status = status;
+
+  if (order) {
+    order.status = status;
+  }
+
   await fs.writeJson(ORDERS_FILE, orders, { spaces: 2 });
+
   return order;
 }
 
 function getSession(chatId) {
   if (!sessions[chatId]) {
-    sessions[chatId] = { items: [], step: "idle", phone: "", address: "" };
+    sessions[chatId] = {
+      restaurantId: null,
+      items: [],
+      step: "choose_restaurant",
+      phone: "",
+      address: "",
+    };
   }
+
   return sessions[chatId];
 }
 
 function resetSession(chatId) {
-  sessions[chatId] = { items: [], step: "idle", phone: "", address: "" };
+  sessions[chatId] = {
+    restaurantId: null,
+    items: [],
+    step: "choose_restaurant",
+    phone: "",
+    address: "",
+  };
 }
 
 function money(n) {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
+}
+
+function getRestaurant(session) {
+  if (!session.restaurantId) return null;
+  return restaurants[session.restaurantId] || null;
 }
 
 function total(session) {
@@ -75,58 +133,82 @@ function summary(session) {
   if (session.items.length === 0) return "🛒 Savat bo‘sh.";
 
   let text = "🧾 Buyurtma:\n\n";
+
   session.items.forEach((item, i) => {
     text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
   });
+
   text += `\n💰 Jami: ${money(total(session))}`;
   return text;
+}
+
+function restaurantKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: restaurants.burger.name, callback_data: "restaurant_burger" }],
+        [{ text: restaurants.sushi.name, callback_data: "restaurant_sushi" }],
+        [{ text: restaurants.coffee.name, callback_data: "restaurant_coffee" }],
+      ],
+    },
+  };
 }
 
 function mainKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        ["📋 Menu", "🧾 Savat"],
-        ["🪑 Bron", "📍 Location"],
-        ["☎️ Admin", "📊 Statistika"],
-        ["❌ Bekor qilish"],
+        ["🏪 Restoran tanlash", "📋 Menu"],
+        ["🧾 Savat", "🪑 Bron"],
+        ["📍 Location", "☎️ Admin"],
+        ["📊 Statistika", "❌ Bekor qilish"],
       ],
       resize_keyboard: true,
     },
   };
 }
 
-function menuText() {
-  return `🍽 ${restaurant.name} MENU:
+function menuText(restaurant) {
+  let text = `🍽 ${restaurant.name} MENU:\n\n`;
 
-🍔 Classic Burger — 32 000 so‘m
-🧀 Cheese Burger — 38 000 so‘m
-🌯 Tovuqli Lavash — 30 000 so‘m
-🌭 Hot Dog — 22 000 so‘m
-🍟 Fri — 15 000 so‘m
-🥤 Cola — 10 000 so‘m
+  Object.values(restaurant.menu).forEach((item) => {
+    text += `${item.name} — ${money(item.price)}\n`;
+  });
 
-👇 Tanlang:`;
+  text += "\n👇 Tanlang:";
+  return text;
 }
 
-function menuKeyboard() {
+function menuKeyboard(restaurant) {
+  const items = Object.entries(restaurant.menu);
+
+  const buttons = [];
+
+  for (let i = 0; i < items.length; i += 2) {
+    const row = [];
+
+    const [key1, item1] = items[i];
+    row.push({
+      text: item1.name,
+      callback_data: `food_${key1}`,
+    });
+
+    if (items[i + 1]) {
+      const [key2, item2] = items[i + 1];
+      row.push({
+        text: item2.name,
+        callback_data: `food_${key2}`,
+      });
+    }
+
+    buttons.push(row);
+  }
+
+  buttons.push([{ text: "🧾 Savat", callback_data: "cart" }]);
+
   return {
     reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "🍔 Classic Burger", callback_data: "food_classic_burger" },
-          { text: "🧀 Cheese Burger", callback_data: "food_cheese_burger" },
-        ],
-        [
-          { text: "🌯 Lavash", callback_data: "food_lavash" },
-          { text: "🌭 Hot Dog", callback_data: "food_hot_dog" },
-        ],
-        [
-          { text: "🍟 Fri", callback_data: "food_fries" },
-          { text: "🥤 Cola", callback_data: "food_cola" },
-        ],
-        [{ text: "🧾 Savat", callback_data: "cart" }],
-      ],
+      inline_keyboard: buttons,
     },
   };
 }
@@ -155,14 +237,36 @@ async function sendStatistics(chatId) {
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const clients = new Set(orders.map((o) => o.phone));
 
-  return bot.sendMessage(
-    chatId,
-    `📊 ${restaurant.name} statistikasi:
+  const byRestaurant = {};
+
+  orders.forEach((order) => {
+    byRestaurant[order.restaurant] =
+      (byRestaurant[order.restaurant] || 0) + 1;
+  });
+
+  let text = `📊 BotFlow SaaS statistikasi:
 
 🛒 Jami orderlar: ${orders.length}
 👥 Klientlar: ${clients.size}
 💰 Jami savdo: ${money(revenue)}
-🕒 Oxirgi order: ${orders[orders.length - 1].orderId}`
+
+🏪 Restoranlar bo‘yicha:
+`;
+
+  Object.entries(byRestaurant).forEach(([name, count]) => {
+    text += `\n${name}: ${count} ta order`;
+  });
+
+  return bot.sendMessage(chatId, text);
+}
+
+function askRestaurant(chatId) {
+  return bot.sendMessage(
+    chatId,
+    `🏪 Qaysi restorandan buyurtma qilmoqchisiz?
+
+Tanlang 👇`,
+    restaurantKeyboard()
   );
 }
 
@@ -172,35 +276,49 @@ bot.onText(/\/start/, (msg) => {
 
   bot.sendMessage(
     chatId,
-    `🍔 ${restaurant.name} ga xush kelibsiz!
+    `🚀 BotFlow AI
 
-Men buyurtma olish, stol bron qilish va admin bilan bog‘lashga yordam beraman.`,
+1 ta bot ichida bir nechta restoran:
+🍔 Burger
+🍣 Sushi
+☕ Coffee
+
+Buyurtma berish uchun restoranni tanlang.`,
     mainKeyboard()
   );
+
+  return askRestaurant(chatId);
 });
 
 bot.onText(/\/orders/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
+
   const orders = await getOrders();
+
   bot.sendMessage(msg.chat.id, `🛒 Jami orderlar: ${orders.length}`);
 });
 
 bot.onText(/\/revenue/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
+
   const orders = await getOrders();
   const revenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+
   bot.sendMessage(msg.chat.id, `💰 Jami tushum: ${money(revenue)}`);
 });
 
 bot.onText(/\/clients/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
+
   const orders = await getOrders();
   const clients = new Set(orders.map((o) => o.phone));
+
   bot.sendMessage(msg.chat.id, `👥 Klientlar soni: ${clients.size}`);
 });
 
 bot.onText(/\/last/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
+
   const orders = await getOrders();
 
   if (orders.length === 0) {
@@ -214,6 +332,7 @@ bot.onText(/\/last/, async (msg) => {
     `🛒 OXIRGI ORDER
 
 🏷 ${last.orderId}
+🏪 ${last.restaurant}
 👤 ${last.customer}
 💰 ${money(last.total)}
 📞 ${last.phone}
@@ -226,6 +345,7 @@ bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = (msg.text || "").toLowerCase().trim();
   const session = getSession(chatId);
+  const restaurant = getRestaurant(session);
 
   if (!text || text === "/start" || text.startsWith("/")) return;
 
@@ -234,12 +354,28 @@ bot.on("message", async (msg) => {
     return bot.sendMessage(chatId, "❌ Buyurtma bekor qilindi.", mainKeyboard());
   }
 
+  if (text.includes("restoran")) {
+    session.items = [];
+    session.restaurantId = null;
+    session.step = "choose_restaurant";
+    return askRestaurant(chatId);
+  }
+
   if (text.includes("menu")) {
-    return bot.sendMessage(chatId, menuText(), menuKeyboard());
+    if (!restaurant) return askRestaurant(chatId);
+
+    return bot.sendMessage(
+      chatId,
+      menuText(restaurant),
+      menuKeyboard(restaurant)
+    );
   }
 
   if (text.includes("savat")) {
-    if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+    if (session.items.length === 0) {
+      return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+    }
+
     return bot.sendMessage(chatId, summary(session), cartKeyboard());
   }
 
@@ -248,22 +384,47 @@ bot.on("message", async (msg) => {
   }
 
   if (text.includes("location") || text.includes("manzil")) {
-    return bot.sendMessage(chatId, `📍 Manzil: ${restaurant.address}\n🗺 ${restaurant.maps}`);
+    if (!restaurant) return askRestaurant(chatId);
+
+    return bot.sendMessage(
+      chatId,
+      `📍 Manzil: ${restaurant.address}
+🗺 ${restaurant.maps}`
+    );
   }
 
   if (text.includes("admin") || text.includes("operator")) {
+    if (!restaurant) return askRestaurant(chatId);
+
     return bot.sendMessage(chatId, `☎️ Admin: ${restaurant.phone}`);
   }
 
   if (text.includes("bron")) {
+    if (!restaurant) return askRestaurant(chatId);
+
     session.step = "booking";
-    return bot.sendMessage(chatId, "🪑 Bron uchun yozing:\n\nAli, 19:00, 4 kishi");
+
+    return bot.sendMessage(
+      chatId,
+      `🪑 ${restaurant.name} uchun bron:
+
+Ism, vaqt, odam soni yozing.
+
+Masalan:
+Ali, 19:00, 4 kishi`
+    );
   }
 
   if (session.step === "booking") {
     const bookingId = "BRON-" + Date.now().toString().slice(-5);
 
-    await bot.sendMessage(chatId, `✅ Bron qabul qilindi!\n🏷 Bron raqami: ${bookingId}`);
+    await bot.sendMessage(
+      chatId,
+      `✅ Bron qabul qilindi!
+
+🏷 Bron raqami: ${bookingId}
+🏪 Restoran: ${restaurant.name}`
+    );
 
     await bot.sendMessage(
       ADMIN_CHAT_ID,
@@ -294,6 +455,7 @@ bot.on("message", async (msg) => {
       chatId,
       `${summary(session)}
 
+🏪 Restoran: ${restaurant.name}
 📞 Telefon: ${session.phone}
 📍 Manzil: ${session.address}
 
@@ -309,7 +471,10 @@ Tasdiqlaysizmi?`,
     );
   }
 
-  return bot.sendMessage(chatId, "Tushunmadim. Buyurtma berish uchun 📋 Menu ni bosing.");
+  return bot.sendMessage(
+    chatId,
+    "Tushunmadim. Buyurtma berish uchun 📋 Menu ni bosing."
+  );
 });
 
 bot.on("callback_query", async (query) => {
@@ -319,23 +484,73 @@ bot.on("callback_query", async (query) => {
 
   await bot.answerCallbackQuery(query.id);
 
-  if (data.startsWith("food_")) {
-    const key = data.replace("food_", "");
-    const item = menu[key];
+  if (data.startsWith("restaurant_")) {
+    const restaurantId = data.replace("restaurant_", "");
+    const restaurant = restaurants[restaurantId];
 
-    if (!item) return bot.sendMessage(chatId, "Mahsulot topilmadi.");
+    if (!restaurant) {
+      return bot.sendMessage(chatId, "Restoran topilmadi.");
+    }
+
+    session.restaurantId = restaurantId;
+    session.items = [];
+    session.step = "idle";
+
+    await bot.sendMessage(
+      chatId,
+      `✅ ${restaurant.name} tanlandi.
+
+Endi menu ko‘rishingiz mumkin.`,
+      mainKeyboard()
+    );
+
+    return bot.sendMessage(
+      chatId,
+      menuText(restaurant),
+      menuKeyboard(restaurant)
+    );
+  }
+
+  if (data.startsWith("food_")) {
+    const restaurant = getRestaurant(session);
+
+    if (!restaurant) return askRestaurant(chatId);
+
+    const key = data.replace("food_", "");
+    const item = restaurant.menu[key];
+
+    if (!item) {
+      return bot.sendMessage(chatId, "Mahsulot topilmadi.");
+    }
 
     session.items.push(item);
 
-    return bot.sendMessage(chatId, `✅ ${item.name} savatga qo‘shildi.\n\n${summary(session)}`, cartKeyboard());
+    return bot.sendMessage(
+      chatId,
+      `✅ ${item.name} savatga qo‘shildi.
+
+${summary(session)}`,
+      cartKeyboard()
+    );
   }
 
   if (data === "more") {
-    return bot.sendMessage(chatId, menuText(), menuKeyboard());
+    const restaurant = getRestaurant(session);
+
+    if (!restaurant) return askRestaurant(chatId);
+
+    return bot.sendMessage(
+      chatId,
+      menuText(restaurant),
+      menuKeyboard(restaurant)
+    );
   }
 
   if (data === "cart") {
-    if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+    if (session.items.length === 0) {
+      return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+    }
+
     return bot.sendMessage(chatId, summary(session), cartKeyboard());
   }
 
@@ -346,7 +561,10 @@ bot.on("callback_query", async (query) => {
   }
 
   if (data === "finish") {
-    if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+    if (session.items.length === 0) {
+      return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+    }
+
     session.step = "phone";
     return bot.sendMessage(chatId, "📞 Telefon raqamingizni yuboring.");
   }
@@ -357,12 +575,17 @@ bot.on("callback_query", async (query) => {
   }
 
   if (data === "confirm") {
+    const restaurant = getRestaurant(session);
+
+    if (!restaurant) return askRestaurant(chatId);
+
     const orderId = "ORDER-" + orderCounter++;
     const orderTotal = total(session);
 
     const order = {
       orderId,
       restaurant: restaurant.name,
+      restaurantId: restaurant.id,
       customer: query.from.first_name || "Noma’lum",
       chatId,
       phone: session.phone,
@@ -380,6 +603,7 @@ bot.on("callback_query", async (query) => {
       `✅ Buyurtmangiz qabul qilindi!
 
 🏷 Buyurtma raqami: ${orderId}
+🏪 Restoran: ${restaurant.name}
 
 Admin tez orada bog‘lanadi.`
     );
@@ -401,10 +625,21 @@ ${summary(session)}
         reply_markup: {
           inline_keyboard: [
             [
-              { text: "✅ Qabul qilindi", callback_data: `status_accept_${orderId}_${chatId}` },
-              { text: "🚚 Yo‘lda", callback_data: `status_delivery_${orderId}_${chatId}` },
+              {
+                text: "✅ Qabul qilindi",
+                callback_data: `status_accept_${orderId}_${chatId}`,
+              },
+              {
+                text: "🚚 Yo‘lda",
+                callback_data: `status_delivery_${orderId}_${chatId}`,
+              },
             ],
-            [{ text: "❌ Bekor qilindi", callback_data: `status_cancel_${orderId}_${chatId}` }],
+            [
+              {
+                text: "❌ Bekor qilindi",
+                callback_data: `status_cancel_${orderId}_${chatId}`,
+              },
+            ],
           ],
         },
       }
@@ -420,19 +655,31 @@ ${summary(session)}
     const orderId = parts[2];
     const customerChatId = parts[3];
 
-    let statusText = "Yangilandi";
+    let statusText = "📌 Buyurtma statusi yangilandi.";
 
-    if (action === "accept") statusText = "✅ Buyurtmangiz qabul qilindi.";
-    if (action === "delivery") statusText = "🚚 Buyurtmangiz yo‘lga chiqdi.";
-    if (action === "cancel") statusText = "❌ Buyurtmangiz bekor qilindi.";
+    if (action === "accept") {
+      statusText = "✅ Buyurtmangiz qabul qilindi.";
+    }
+
+    if (action === "delivery") {
+      statusText = "🚚 Buyurtmangiz yo‘lga chiqdi.";
+    }
+
+    if (action === "cancel") {
+      statusText = "❌ Buyurtmangiz bekor qilindi.";
+    }
 
     await updateOrderStatus(orderId, statusText);
 
     await bot.sendMessage(customerChatId, statusText);
-    await bot.sendMessage(chatId, `📌 ${orderId} statusi yangilandi:\n${statusText}`);
+    await bot.sendMessage(
+      chatId,
+      `📌 ${orderId} statusi yangilandi:\n${statusText}`
+    );
+
     return;
   }
 });
 
 ensureDataFile();
-console.log("🚀 BotFlow Burger FINAL ishlayapti...");
+console.log("🚀 BotFlow MULTI RESTAURANT SaaS ishlayapti...");
