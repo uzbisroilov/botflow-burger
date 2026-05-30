@@ -2,29 +2,27 @@ require("dotenv").config();
 
 const TelegramBot = require("node-telegram-bot-api");
 const fs = require("fs-extra");
+const express = require("express");
+const cors = require("cors");
 
 let openai = null;
-
 if (process.env.OPENAI_API_KEY) {
   try {
     const OpenAI = require("openai");
-
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     console.log("🤖 OpenAI ulandi");
   } catch (error) {
     console.log("⚠️ OpenAI ulanmagan:", error.message);
   }
-} else {
-  console.log("⚠️ OPENAI_API_KEY topilmadi. AI funksiyasi o‘chirilgan.");
 }
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  polling: true,
-});
+const app = express();
+app.use(cors());
+app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
+
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const ORDERS_FILE = "./data/orders.json";
 
@@ -33,7 +31,7 @@ const restaurants = {
     id: "burger",
     name: "🍔 BotFlow Burger",
     phone: "+998 90 777 70 70",
-    address: "Toshkent shahar, Chilonzor, Bunyodkor shoh ko‘chasi",
+    address: "Toshkent shahar, Chilonzor",
     maps: "https://maps.google.com",
     menu: {
       classic_burger: { name: "🍔 Classic Burger", price: 32000 },
@@ -44,7 +42,6 @@ const restaurants = {
       cola: { name: "🥤 Cola", price: 10000 },
     },
   },
-
   sushi: {
     id: "sushi",
     name: "🍣 Sushi Master",
@@ -60,7 +57,6 @@ const restaurants = {
       cola: { name: "🥤 Cola", price: 10000 },
     },
   },
-
   coffee: {
     id: "coffee",
     name: "☕ Coffee Time",
@@ -83,43 +79,27 @@ const sessions = {};
 
 async function ensureDataFile() {
   await fs.ensureDir("./data");
-
   if (!(await fs.pathExists(ORDERS_FILE))) {
-    await fs.writeJson(ORDERS_FILE, [], {
-      spaces: 2,
-    });
+    await fs.writeJson(ORDERS_FILE, [], { spaces: 2 });
   }
 }
 
 async function getOrders() {
   await ensureDataFile();
-
   return await fs.readJson(ORDERS_FILE);
 }
 
 async function saveOrder(order) {
   const orders = await getOrders();
-
   orders.push(order);
-
-  await fs.writeJson(ORDERS_FILE, orders, {
-    spaces: 2,
-  });
+  await fs.writeJson(ORDERS_FILE, orders, { spaces: 2 });
 }
 
 async function updateOrderStatus(orderId, status) {
   const orders = await getOrders();
-
   const order = orders.find((o) => o.orderId === orderId);
-
-  if (order) {
-    order.status = status;
-  }
-
-  await fs.writeJson(ORDERS_FILE, orders, {
-    spaces: 2,
-  });
-
+  if (order) order.status = status;
+  await fs.writeJson(ORDERS_FILE, orders, { spaces: 2 });
   return order;
 }
 
@@ -133,7 +113,6 @@ function getSession(chatId) {
       address: "",
     };
   }
-
   return sessions[chatId];
 }
 
@@ -148,15 +127,11 @@ function resetSession(chatId) {
 }
 
 function money(n) {
-  return (
-    n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") +
-    " so‘m"
-  );
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
 }
 
 function getRestaurant(session) {
   if (!session.restaurantId) return null;
-
   return restaurants[session.restaurantId] || null;
 }
 
@@ -165,18 +140,13 @@ function total(session) {
 }
 
 function summary(session) {
-  if (session.items.length === 0) {
-    return "🛒 Savat bo‘sh.";
-  }
+  if (session.items.length === 0) return "🛒 Savat bo‘sh.";
 
   let text = "🧾 Buyurtma:\n\n";
-
   session.items.forEach((item, i) => {
     text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
   });
-
   text += `\n💰 Jami: ${money(total(session))}`;
-
   return text;
 }
 
@@ -184,24 +154,9 @@ function restaurantKeyboard() {
   return {
     reply_markup: {
       inline_keyboard: [
-        [
-          {
-            text: restaurants.burger.name,
-            callback_data: "restaurant_burger",
-          },
-        ],
-        [
-          {
-            text: restaurants.sushi.name,
-            callback_data: "restaurant_sushi",
-          },
-        ],
-        [
-          {
-            text: restaurants.coffee.name,
-            callback_data: "restaurant_coffee",
-          },
-        ],
+        [{ text: restaurants.burger.name, callback_data: "restaurant_burger" }],
+        [{ text: restaurants.sushi.name, callback_data: "restaurant_sushi" }],
+        [{ text: restaurants.coffee.name, callback_data: "restaurant_coffee" }],
       ],
     },
   };
@@ -223,13 +178,10 @@ function mainKeyboard() {
 
 function menuText(restaurant) {
   let text = `🍽 ${restaurant.name} MENU:\n\n`;
-
   Object.values(restaurant.menu).forEach((item) => {
     text += `${item.name} — ${money(item.price)}\n`;
   });
-
   text += "\n👇 Tanlang:";
-
   return text;
 }
 
@@ -239,38 +191,19 @@ function menuKeyboard(restaurant) {
 
   for (let i = 0; i < items.length; i += 2) {
     const row = [];
-
     const [key1, item1] = items[i];
-
-    row.push({
-      text: item1.name,
-      callback_data: `food_${key1}`,
-    });
+    row.push({ text: item1.name, callback_data: `food_${key1}` });
 
     if (items[i + 1]) {
       const [key2, item2] = items[i + 1];
-
-      row.push({
-        text: item2.name,
-        callback_data: `food_${key2}`,
-      });
+      row.push({ text: item2.name, callback_data: `food_${key2}` });
     }
 
     buttons.push(row);
   }
 
-  buttons.push([
-    {
-      text: "🧾 Savat",
-      callback_data: "cart",
-    },
-  ]);
-
-  return {
-    reply_markup: {
-      inline_keyboard: buttons,
-    },
-  };
+  buttons.push([{ text: "🧾 Savat", callback_data: "cart" }]);
+  return { reply_markup: { inline_keyboard: buttons } };
 }
 
 function cartKeyboard() {
@@ -278,21 +211,10 @@ function cartKeyboard() {
     reply_markup: {
       inline_keyboard: [
         [
-          {
-            text: "➕ Yana qo‘shish",
-            callback_data: "more",
-          },
-          {
-            text: "✅ Yakunlash",
-            callback_data: "finish",
-          },
+          { text: "➕ Yana qo‘shish", callback_data: "more" },
+          { text: "✅ Yakunlash", callback_data: "finish" },
         ],
-        [
-          {
-            text: "🧹 Savatni tozalash",
-            callback_data: "clear_cart",
-          },
-        ],
+        [{ text: "🧹 Savatni tozalash", callback_data: "clear_cart" }],
       ],
     },
   };
@@ -301,22 +223,14 @@ function cartKeyboard() {
 async function sendStatistics(chatId) {
   const orders = await getOrders();
 
-  if (orders.length === 0) {
-    return bot.sendMessage(chatId, "📊 Hali orderlar yo‘q.");
-  }
+  if (orders.length === 0) return bot.sendMessage(chatId, "📊 Hali orderlar yo‘q.");
 
-  const revenue = orders.reduce(
-    (sum, order) => sum + (order.total || 0),
-    0
-  );
-
+  const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const clients = new Set(orders.map((o) => o.phone));
-
   const byRestaurant = {};
 
   orders.forEach((order) => {
-    byRestaurant[order.restaurant] =
-      (byRestaurant[order.restaurant] || 0) + 1;
+    byRestaurant[order.restaurant] = (byRestaurant[order.restaurant] || 0) + 1;
   });
 
   let text = `📊 BotFlow SaaS statistikasi:
@@ -336,41 +250,27 @@ async function sendStatistics(chatId) {
 }
 
 async function aiWaiterReply(text, restaurant) {
-  if (!openai) {
-    return "🤖 AI hali ulanmagan. Buyurtma uchun 📋 Menu ni bosing.";
-  }
+  if (!openai) return "🤖 AI hali ulanmagan. Buyurtma uchun 📋 Menu ni bosing.";
 
   const menuInfo = restaurant
-    ? Object.values(restaurant.menu)
-        .map((i) => `${i.name} - ${money(i.price)}`)
-        .join("\n")
-    : Object.values(restaurants)
-        .map((r) => r.name)
-        .join("\n");
-
-  const systemText = `
-Sen BotFlow AI restoran operatorisan.
-O‘zbek tilida qisqa, muloyim va sotuvchi uslubda javob ber.
-Mijozga taom tavsiya qil.
-Buyurtma qilish uchun Menu tugmasini bosishini ayt.
-Yandex yoki boshqa delivery xizmatlari bilan raqobat qilmaymiz.
-Biz restoran ichki AI operatorimiz.
-
-Restoran/menyu:
-${menuInfo}
-`;
+    ? Object.values(restaurant.menu).map((i) => `${i.name} - ${money(i.price)}`).join("\n")
+    : Object.values(restaurants).map((r) => r.name).join("\n");
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4.1-mini",
     messages: [
       {
         role: "system",
-        content: systemText,
+        content: `
+Sen BotFlow AI restoran operatorisan.
+O‘zbek tilida qisqa, muloyim va sotuvchi uslubda javob ber.
+Mijozga taom tavsiya qil. Buyurtma qilish uchun Menu tugmasini bosishini ayt.
+
+Menyu:
+${menuInfo}
+`,
       },
-      {
-        role: "user",
-        content: text,
-      },
+      { role: "user", content: text },
     ],
   });
 
@@ -378,18 +278,86 @@ ${menuInfo}
 }
 
 function askRestaurant(chatId) {
-  return bot.sendMessage(
-    chatId,
-    `🏪 Qaysi restorandan buyurtma qilmoqchisiz?
-
-Tanlang 👇`,
-    restaurantKeyboard()
-  );
+  return bot.sendMessage(chatId, "🏪 Qaysi restorandan buyurtma qilmoqchisiz?", restaurantKeyboard());
 }
 
+/* WEB ADMIN PANEL */
+app.get("/", (req, res) => {
+  res.send("BotFlow AI is running 🚀");
+});
+
+app.get("/admin", async (req, res) => {
+  const orders = await getOrders();
+  const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+  const clients = new Set(orders.map((o) => o.phone));
+
+  const rows = orders
+    .slice()
+    .reverse()
+    .map(
+      (o) => `
+      <tr>
+        <td>${o.orderId}</td>
+        <td>${o.restaurant}</td>
+        <td>${o.customer}</td>
+        <td>${o.phone}</td>
+        <td>${o.address}</td>
+        <td>${money(o.total || 0)}</td>
+        <td>${o.status || "Yangi"}</td>
+        <td>${new Date(o.createdAt).toLocaleString("ru-RU")}</td>
+      </tr>`
+    )
+    .join("");
+
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>BotFlow Admin</title>
+  <style>
+    body { font-family: Arial; background:#f4f6f8; padding:24px; }
+    h1 { margin-bottom:8px; }
+    .cards { display:flex; gap:16px; margin:20px 0; }
+    .card { background:white; padding:18px; border-radius:14px; box-shadow:0 3px 12px #0001; min-width:180px; }
+    table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; }
+    th, td { padding:12px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
+    th { background:#111827; color:white; }
+  </style>
+</head>
+<body>
+  <h1>🚀 BotFlow Admin Panel</h1>
+  <p>Restaurant SaaS MVP dashboard</p>
+
+  <div class="cards">
+    <div class="card"><b>🛒 Orders</b><br>${orders.length}</div>
+    <div class="card"><b>👥 Clients</b><br>${clients.size}</div>
+    <div class="card"><b>💰 Revenue</b><br>${money(revenue)}</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Order ID</th>
+        <th>Restaurant</th>
+        <th>Customer</th>
+        <th>Phone</th>
+        <th>Address</th>
+        <th>Total</th>
+        <th>Status</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>
+`);
+});
+
+/* TELEGRAM BOT */
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-
   resetSession(chatId);
 
   bot.sendMessage(
@@ -410,43 +378,28 @@ Buyurtma berish uchun restoranni tanlang.`,
 
 bot.onText(/\/orders/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
-
   const orders = await getOrders();
-
   bot.sendMessage(msg.chat.id, `🛒 Jami orderlar: ${orders.length}`);
 });
 
 bot.onText(/\/revenue/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
-
   const orders = await getOrders();
-
-  const revenue = orders.reduce(
-    (sum, o) => sum + (o.total || 0),
-    0
-  );
-
+  const revenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
   bot.sendMessage(msg.chat.id, `💰 Jami tushum: ${money(revenue)}`);
 });
 
 bot.onText(/\/clients/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
-
   const orders = await getOrders();
-
   const clients = new Set(orders.map((o) => o.phone));
-
   bot.sendMessage(msg.chat.id, `👥 Klientlar soni: ${clients.size}`);
 });
 
 bot.onText(/\/last/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
-
   const orders = await getOrders();
-
-  if (orders.length === 0) {
-    return bot.sendMessage(msg.chat.id, "Orderlar yo‘q.");
-  }
+  if (orders.length === 0) return bot.sendMessage(msg.chat.id, "Orderlar yo‘q.");
 
   const last = orders[orders.length - 1];
 
@@ -475,37 +428,23 @@ bot.on("message", async (msg) => {
 
   if (text.includes("bekor")) {
     resetSession(chatId);
-
-    return bot.sendMessage(
-      chatId,
-      "❌ Buyurtma bekor qilindi.",
-      mainKeyboard()
-    );
+    return bot.sendMessage(chatId, "❌ Buyurtma bekor qilindi.", mainKeyboard());
   }
 
   if (text.includes("restoran")) {
     session.items = [];
     session.restaurantId = null;
     session.step = "choose_restaurant";
-
     return askRestaurant(chatId);
   }
 
   if (text.includes("menu")) {
     if (!restaurant) return askRestaurant(chatId);
-
-    return bot.sendMessage(
-      chatId,
-      menuText(restaurant),
-      menuKeyboard(restaurant)
-    );
+    return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
   }
 
   if (text.includes("savat")) {
-    if (session.items.length === 0) {
-      return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-    }
-
+    if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
     return bot.sendMessage(chatId, summary(session), cartKeyboard());
   }
 
@@ -515,47 +454,24 @@ bot.on("message", async (msg) => {
 
   if (text.includes("location") || text.includes("manzil")) {
     if (!restaurant) return askRestaurant(chatId);
-
-    return bot.sendMessage(
-      chatId,
-      `📍 Manzil: ${restaurant.address}
-🗺 ${restaurant.maps}`
-    );
+    return bot.sendMessage(chatId, `📍 Manzil: ${restaurant.address}\n🗺 ${restaurant.maps}`);
   }
 
   if (text.includes("admin") || text.includes("operator")) {
     if (!restaurant) return askRestaurant(chatId);
-
     return bot.sendMessage(chatId, `☎️ Admin: ${restaurant.phone}`);
   }
 
   if (text.includes("bron")) {
     if (!restaurant) return askRestaurant(chatId);
-
     session.step = "booking";
-
-    return bot.sendMessage(
-      chatId,
-      `🪑 ${restaurant.name} uchun bron:
-
-Ism, vaqt, odam soni yozing.
-
-Masalan:
-Ali, 19:00, 4 kishi`
-    );
+    return bot.sendMessage(chatId, `🪑 ${restaurant.name} uchun bron:\n\nAli, 19:00, 4 kishi`);
   }
 
   if (session.step === "booking") {
     const bookingId = "BRON-" + Date.now().toString().slice(-5);
 
-    await bot.sendMessage(
-      chatId,
-      `✅ Bron qabul qilindi!
-
-🏷 Bron raqami: ${bookingId}
-🏪 Restoran: ${restaurant.name}`
-    );
-
+    await bot.sendMessage(chatId, `✅ Bron qabul qilindi!\n\n🏷 Bron raqami: ${bookingId}`);
     await bot.sendMessage(
       ADMIN_CHAT_ID,
       `🪑 YANGI BRON
@@ -568,18 +484,13 @@ Ali, 19:00, 4 kishi`
     );
 
     session.step = "idle";
-
     return;
   }
 
   if (session.step === "phone") {
     session.phone = msg.text;
     session.step = "address";
-
-    return bot.sendMessage(
-      chatId,
-      "📍 Yetkazib berish manzilini yuboring."
-    );
+    return bot.sendMessage(chatId, "📍 Yetkazib berish manzilini yuboring.");
   }
 
   if (session.step === "address") {
@@ -598,18 +509,8 @@ Tasdiqlaysizmi?`,
       {
         reply_markup: {
           inline_keyboard: [
-            [
-              {
-                text: "✅ Tasdiqlash",
-                callback_data: "confirm",
-              },
-            ],
-            [
-              {
-                text: "❌ Bekor qilish",
-                callback_data: "cancel",
-              },
-            ],
+            [{ text: "✅ Tasdiqlash", callback_data: "confirm" }],
+            [{ text: "❌ Bekor qilish", callback_data: "cancel" }],
           ],
         },
       }
@@ -618,15 +519,10 @@ Tasdiqlaysizmi?`,
 
   try {
     const aiText = await aiWaiterReply(rawText, restaurant);
-
     return bot.sendMessage(chatId, aiText);
   } catch (error) {
     console.log("AI error:", error.message);
-
-    return bot.sendMessage(
-      chatId,
-      "🤖 Hozircha tushunmadim. Buyurtma uchun 📋 Menu ni bosing."
-    );
+    return bot.sendMessage(chatId, "🤖 Hozircha tushunmadim. Buyurtma uchun 📋 Menu ni bosing.");
   }
 });
 
@@ -640,101 +536,58 @@ bot.on("callback_query", async (query) => {
   if (data.startsWith("restaurant_")) {
     const restaurantId = data.replace("restaurant_", "");
     const restaurant = restaurants[restaurantId];
-
-    if (!restaurant) {
-      return bot.sendMessage(chatId, "Restoran topilmadi.");
-    }
+    if (!restaurant) return bot.sendMessage(chatId, "Restoran topilmadi.");
 
     session.restaurantId = restaurantId;
     session.items = [];
     session.step = "idle";
 
-    await bot.sendMessage(
-      chatId,
-      `✅ ${restaurant.name} tanlandi.
-
-Endi menu ko‘rishingiz mumkin.`,
-      mainKeyboard()
-    );
-
-    return bot.sendMessage(
-      chatId,
-      menuText(restaurant),
-      menuKeyboard(restaurant)
-    );
+    await bot.sendMessage(chatId, `✅ ${restaurant.name} tanlandi.`, mainKeyboard());
+    return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
   }
 
   if (data.startsWith("food_")) {
     const restaurant = getRestaurant(session);
-
     if (!restaurant) return askRestaurant(chatId);
 
     const key = data.replace("food_", "");
     const item = restaurant.menu[key];
-
     if (!item) return bot.sendMessage(chatId, "Mahsulot topilmadi.");
 
     session.items.push(item);
-
-    return bot.sendMessage(
-      chatId,
-      `✅ ${item.name} savatga qo‘shildi.
-
-${summary(session)}`,
-      cartKeyboard()
-    );
+    return bot.sendMessage(chatId, `✅ ${item.name} savatga qo‘shildi.\n\n${summary(session)}`, cartKeyboard());
   }
 
   if (data === "more") {
     const restaurant = getRestaurant(session);
-
     if (!restaurant) return askRestaurant(chatId);
-
-    return bot.sendMessage(
-      chatId,
-      menuText(restaurant),
-      menuKeyboard(restaurant)
-    );
+    return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
   }
 
   if (data === "cart") {
-    if (session.items.length === 0) {
-      return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-    }
-
+    if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
     return bot.sendMessage(chatId, summary(session), cartKeyboard());
   }
 
   if (data === "clear_cart") {
     session.items = [];
     session.step = "idle";
-
     return bot.sendMessage(chatId, "🧹 Savat tozalandi.", mainKeyboard());
   }
 
   if (data === "finish") {
-    if (session.items.length === 0) {
-      return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-    }
-
+    if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
     session.step = "phone";
-
     return bot.sendMessage(chatId, "📞 Telefon raqamingizni yuboring.");
   }
 
   if (data === "cancel") {
     resetSession(chatId);
-
-    return bot.sendMessage(
-      chatId,
-      "❌ Buyurtma bekor qilindi.",
-      mainKeyboard()
-    );
+    return bot.sendMessage(chatId, "❌ Buyurtma bekor qilindi.", mainKeyboard());
   }
 
   if (data === "confirm") {
     const restaurant = getRestaurant(session);
-
     if (!restaurant) return askRestaurant(chatId);
 
     const orderId = "ORDER-" + orderCounter++;
@@ -756,15 +609,7 @@ ${summary(session)}`,
 
     await saveOrder(order);
 
-    await bot.sendMessage(
-      chatId,
-      `✅ Buyurtmangiz qabul qilindi!
-
-🏷 Buyurtma raqami: ${orderId}
-🏪 Restoran: ${restaurant.name}
-
-Admin tez orada bog‘lanadi.`
-    );
+    await bot.sendMessage(chatId, `✅ Buyurtmangiz qabul qilindi!\n\n🏷 Buyurtma raqami: ${orderId}`);
 
     await bot.sendMessage(
       ADMIN_CHAT_ID,
@@ -783,28 +628,16 @@ ${summary(session)}
         reply_markup: {
           inline_keyboard: [
             [
-              {
-                text: "✅ Qabul qilindi",
-                callback_data: `status_accept_${orderId}_${chatId}`,
-              },
-              {
-                text: "🚚 Yo‘lda",
-                callback_data: `status_delivery_${orderId}_${chatId}`,
-              },
+              { text: "✅ Qabul qilindi", callback_data: `status_accept_${orderId}_${chatId}` },
+              { text: "🚚 Yo‘lda", callback_data: `status_delivery_${orderId}_${chatId}` },
             ],
-            [
-              {
-                text: "❌ Bekor qilindi",
-                callback_data: `status_cancel_${orderId}_${chatId}`,
-              },
-            ],
+            [{ text: "❌ Bekor qilindi", callback_data: `status_cancel_${orderId}_${chatId}` }],
           ],
         },
       }
     );
 
     resetSession(chatId);
-
     return;
   }
 
@@ -815,33 +648,21 @@ ${summary(session)}
     const customerChatId = parts[3];
 
     let statusText = "📌 Buyurtma statusi yangilandi.";
-
-    if (action === "accept") {
-      statusText = "✅ Buyurtmangiz qabul qilindi.";
-    }
-
-    if (action === "delivery") {
-      statusText = "🚚 Buyurtmangiz yo‘lga chiqdi.";
-    }
-
-    if (action === "cancel") {
-      statusText = "❌ Buyurtmangiz bekor qilindi.";
-    }
+    if (action === "accept") statusText = "✅ Buyurtmangiz qabul qilindi.";
+    if (action === "delivery") statusText = "🚚 Buyurtmangiz yo‘lga chiqdi.";
+    if (action === "cancel") statusText = "❌ Buyurtmangiz bekor qilindi.";
 
     await updateOrderStatus(orderId, statusText);
-
     await bot.sendMessage(customerChatId, statusText);
-
-    await bot.sendMessage(
-      chatId,
-      `📌 ${orderId} statusi yangilandi:
-${statusText}`
-    );
-
+    await bot.sendMessage(chatId, `📌 ${orderId} statusi yangilandi:\n${statusText}`);
     return;
   }
 });
 
 ensureDataFile();
 
-console.log("🚀 BotFlow AI WAITER SaaS ishlayapti...");
+app.listen(PORT, () => {
+  console.log(`🌐 Admin panel ishlayapti: port ${PORT}`);
+});
+
+console.log("🚀 BotFlow Admin Panel SaaS ishlayapti...");
