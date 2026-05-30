@@ -22,7 +22,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
-
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const ORDERS_FILE = "./data/orders.json";
@@ -136,7 +135,7 @@ function resetSession(chatId) {
 }
 
 function money(n) {
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
+  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
 }
 
 function getRestaurant(session) {
@@ -157,6 +156,11 @@ function summary(session) {
   });
   text += `\n💰 Jami: ${money(total(session))}`;
   return text;
+}
+
+function orderItemsText(order) {
+  if (!order.items || order.items.length === 0) return "-";
+  return order.items.map((item, i) => `${i + 1}. ${item.name} — ${money(item.price)}`).join("<br>");
 }
 
 function restaurantKeyboard() {
@@ -229,6 +233,48 @@ function cartKeyboard() {
   };
 }
 
+function isClosedOrder(status) {
+  return status === "❌ Bekor qilindi" || status === "🎉 Yetkazildi";
+}
+
+function adminActionsHtml(order) {
+  if (isClosedOrder(order.status)) {
+    return `<span class="closed">Yakunlangan</span>`;
+  }
+
+  return `
+    <form method="POST" action="/admin/status" style="display:inline">
+      <input type="hidden" name="orderId" value="${order.orderId}" />
+      <input type="hidden" name="status" value="✅ Qabul qilindi" />
+      <button class="btn green">Qabul</button>
+    </form>
+
+    <form method="POST" action="/admin/status" style="display:inline">
+      <input type="hidden" name="orderId" value="${order.orderId}" />
+      <input type="hidden" name="status" value="👨‍🍳 Tayyorlanmoqda" />
+      <button class="btn orange">Tayyorlanmoqda</button>
+    </form>
+
+    <form method="POST" action="/admin/status" style="display:inline">
+      <input type="hidden" name="orderId" value="${order.orderId}" />
+      <input type="hidden" name="status" value="🚗 Yo‘lda" />
+      <button class="btn blue">Yo‘lda</button>
+    </form>
+
+    <form method="POST" action="/admin/status" style="display:inline">
+      <input type="hidden" name="orderId" value="${order.orderId}" />
+      <input type="hidden" name="status" value="🎉 Yetkazildi" />
+      <button class="btn purple">Yetkazildi</button>
+    </form>
+
+    <form method="POST" action="/admin/status" style="display:inline">
+      <input type="hidden" name="orderId" value="${order.orderId}" />
+      <input type="hidden" name="status" value="❌ Bekor qilindi" />
+      <button class="btn red">Bekor</button>
+    </form>
+  `;
+}
+
 async function sendStatistics(chatId) {
   const orders = await getOrders();
 
@@ -263,6 +309,7 @@ async function aiWaiterReply(text, restaurant) {
 Sen BotFlow AI restoran operatorisan.
 O‘zbek tilida qisqa, muloyim va sotuvchi uslubda javob ber.
 Mijozga taom tavsiya qil. Buyurtma qilish uchun Menu tugmasini bosishini ayt.
+Yandex yoki boshqa delivery xizmatlari bilan raqobat qilma. Biz restoran ichki AI operatorimiz.
 
 Menyu:
 ${menuInfo}
@@ -293,6 +340,22 @@ app.get("/admin", async (req, res) => {
   const orders = await getOrders();
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const clients = new Set(orders.map((o) => o.phone));
+  const activeOrders = orders.filter((o) => !isClosedOrder(o.status)).length;
+  const cancelledOrders = orders.filter((o) => o.status === "❌ Bekor qilindi").length;
+  const deliveredOrders = orders.filter((o) => o.status === "🎉 Yetkazildi").length;
+
+  const productStats = {};
+  orders.forEach((order) => {
+    (order.items || []).forEach((item) => {
+      productStats[item.name] = (productStats[item.name] || 0) + 1;
+    });
+  });
+
+  const topProducts = Object.entries(productStats)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => `<li>${name}: <b>${count}</b> ta</li>`)
+    .join("");
 
   const rows = orders
     .slice()
@@ -307,40 +370,11 @@ app.get("/admin", async (req, res) => {
         <td>${o.customer}</td>
         <td>${o.phone}</td>
         <td>${o.address}</td>
+        <td>${orderItemsText(o)}</td>
         <td>${money(o.total || 0)}</td>
         <td><b>${o.status || "Yangi"}</b></td>
         <td>${date}</td>
-        <td>
-          <form method="POST" action="/admin/status" style="display:inline">
-            <input type="hidden" name="orderId" value="${o.orderId}" />
-            <input type="hidden" name="status" value="✅ Qabul qilindi" />
-            <button class="btn green">Qabul</button>
-          </form>
-
-          <form method="POST" action="/admin/status" style="display:inline">
-            <input type="hidden" name="orderId" value="${o.orderId}" />
-            <input type="hidden" name="status" value="👨‍🍳 Tayyorlanmoqda" />
-            <button class="btn orange">Tayyorlanmoqda</button>
-          </form>
-
-          <form method="POST" action="/admin/status" style="display:inline">
-            <input type="hidden" name="orderId" value="${o.orderId}" />
-            <input type="hidden" name="status" value="🚗 Yo‘lda" />
-            <button class="btn blue">Yo‘lda</button>
-          </form>
-
-          <form method="POST" action="/admin/status" style="display:inline">
-            <input type="hidden" name="orderId" value="${o.orderId}" />
-            <input type="hidden" name="status" value="🎉 Yetkazildi" />
-            <button class="btn purple">Yetkazildi</button>
-          </form>
-
-          <form method="POST" action="/admin/status" style="display:inline">
-            <input type="hidden" name="orderId" value="${o.orderId}" />
-            <input type="hidden" name="status" value="❌ Bekor qilindi" />
-            <button class="btn red">Bekor</button>
-          </form>
-        </td>
+        <td>${adminActionsHtml(o)}</td>
       </tr>`;
     })
     .join("");
@@ -352,81 +386,22 @@ app.get("/admin", async (req, res) => {
   <meta charset="UTF-8" />
   <title>BotFlow Admin</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background:#f4f6f8;
-      padding:24px;
-      color:#111827;
-    }
-
-    h1 {
-      margin-bottom:8px;
-      font-size:34px;
-    }
-
-    .cards {
-      display:flex;
-      gap:16px;
-      margin:20px 0;
-      flex-wrap:wrap;
-    }
-
-    .card {
-      background:white;
-      padding:18px;
-      border-radius:16px;
-      box-shadow:0 3px 12px #0001;
-      min-width:180px;
-      font-size:20px;
-    }
-
-    table {
-      width:100%;
-      border-collapse:collapse;
-      background:white;
-      border-radius:16px;
-      overflow:hidden;
-      box-shadow:0 3px 12px #0001;
-    }
-
-    th, td {
-      padding:12px;
-      border-bottom:1px solid #eee;
-      text-align:left;
-      font-size:14px;
-      vertical-align:top;
-    }
-
-    th {
-      background:#111827;
-      color:white;
-    }
-
-    .btn {
-      border:none;
-      color:white;
-      padding:7px 10px;
-      border-radius:8px;
-      cursor:pointer;
-      margin:2px;
-      font-size:12px;
-    }
-
+    body { font-family: Arial, sans-serif; background:#f4f6f8; padding:24px; color:#111827; }
+    h1 { margin-bottom:8px; font-size:34px; }
+    .cards { display:flex; gap:16px; margin:20px 0; flex-wrap:wrap; }
+    .card { background:white; padding:18px; border-radius:16px; box-shadow:0 3px 12px #0001; min-width:170px; font-size:20px; }
+    .panel { background:white; padding:18px; border-radius:16px; box-shadow:0 3px 12px #0001; margin:18px 0; }
+    table { width:100%; border-collapse:collapse; background:white; border-radius:16px; overflow:hidden; box-shadow:0 3px 12px #0001; }
+    th, td { padding:12px; border-bottom:1px solid #eee; text-align:left; font-size:14px; vertical-align:top; }
+    th { background:#111827; color:white; }
+    .btn { border:none; color:white; padding:7px 10px; border-radius:8px; cursor:pointer; margin:2px; font-size:12px; }
     .green { background:#16a34a; }
     .orange { background:#f97316; }
     .blue { background:#2563eb; }
     .purple { background:#7c3aed; }
     .red { background:#dc2626; }
-
-    .refresh {
-      display:inline-block;
-      margin:10px 0 20px;
-      background:#111827;
-      color:white;
-      padding:10px 14px;
-      border-radius:10px;
-      text-decoration:none;
-    }
+    .closed { color:#6b7280; font-weight:bold; }
+    .refresh { display:inline-block; margin:10px 0 20px; background:#111827; color:white; padding:10px 14px; border-radius:10px; text-decoration:none; }
   </style>
 </head>
 <body>
@@ -437,8 +412,16 @@ app.get("/admin", async (req, res) => {
 
   <div class="cards">
     <div class="card"><b>🛒 Orders</b><br>${orders.length}</div>
+    <div class="card"><b>🟡 Active</b><br>${activeOrders}</div>
+    <div class="card"><b>🎉 Delivered</b><br>${deliveredOrders}</div>
+    <div class="card"><b>❌ Cancelled</b><br>${cancelledOrders}</div>
     <div class="card"><b>👥 Clients</b><br>${clients.size}</div>
     <div class="card"><b>💰 Revenue</b><br>${money(revenue)}</div>
+  </div>
+
+  <div class="panel">
+    <h3>🔥 Top mahsulotlar</h3>
+    <ul>${topProducts || "<li>Hali mahsulot yo‘q</li>"}</ul>
   </div>
 
   <table>
@@ -449,6 +432,7 @@ app.get("/admin", async (req, res) => {
         <th>Customer</th>
         <th>Phone</th>
         <th>Address</th>
+        <th>Items</th>
         <th>Total</th>
         <th>Status</th>
         <th>Date</th>
@@ -482,6 +466,13 @@ ${status}`
 
 /* ===================== TELEGRAM BOT ===================== */
 
+// CHAT ID COMMAND
+bot.onText(/\/id/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    `🆔 Chat ID: ${msg.chat.id}`
+  );
+});
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   resetSession(chatId);
@@ -812,4 +803,4 @@ app.listen(PORT, () => {
   console.log(`🌐 Admin panel ishlayapti: port ${PORT}`);
 });
 
-console.log("🚀 BotFlow Admin Control SaaS ishlayapti...");
+console.log("🚀 BotFlow SaaS MAX MVP ishlayapti...");
