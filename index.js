@@ -19,6 +19,7 @@ if (process.env.OPENAI_API_KEY) {
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 
@@ -74,7 +75,6 @@ const restaurants = {
   },
 };
 
-let orderCounter = 1000;
 const sessions = {};
 
 async function ensureDataFile() {
@@ -89,17 +89,26 @@ async function getOrders() {
   return await fs.readJson(ORDERS_FILE);
 }
 
+async function saveOrders(orders) {
+  await fs.writeJson(ORDERS_FILE, orders, { spaces: 2 });
+}
+
 async function saveOrder(order) {
   const orders = await getOrders();
   orders.push(order);
-  await fs.writeJson(ORDERS_FILE, orders, { spaces: 2 });
+  await saveOrders(orders);
 }
 
 async function updateOrderStatus(orderId, status) {
   const orders = await getOrders();
   const order = orders.find((o) => o.orderId === orderId);
-  if (order) order.status = status;
-  await fs.writeJson(ORDERS_FILE, orders, { spaces: 2 });
+
+  if (!order) return null;
+
+  order.status = status;
+  order.updatedAt = new Date().toISOString();
+
+  await saveOrders(orders);
   return order;
 }
 
@@ -227,26 +236,15 @@ async function sendStatistics(chatId) {
 
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const clients = new Set(orders.map((o) => o.phone));
-  const byRestaurant = {};
 
-  orders.forEach((order) => {
-    byRestaurant[order.restaurant] = (byRestaurant[order.restaurant] || 0) + 1;
-  });
-
-  let text = `📊 BotFlow SaaS statistikasi:
+  return bot.sendMessage(
+    chatId,
+    `📊 BotFlow statistikasi:
 
 🛒 Jami orderlar: ${orders.length}
 👥 Klientlar: ${clients.size}
-💰 Jami savdo: ${money(revenue)}
-
-🏪 Restoranlar bo‘yicha:
-`;
-
-  Object.entries(byRestaurant).forEach(([name, count]) => {
-    text += `\n${name}: ${count} ta order`;
-  });
-
-  return bot.sendMessage(chatId, text);
+💰 Jami savdo: ${money(revenue)}`
+  );
 }
 
 async function aiWaiterReply(text, restaurant) {
@@ -278,12 +276,17 @@ ${menuInfo}
 }
 
 function askRestaurant(chatId) {
-  return bot.sendMessage(chatId, "🏪 Qaysi restorandan buyurtma qilmoqchisiz?", restaurantKeyboard());
+  return bot.sendMessage(
+    chatId,
+    "🏪 Qaysi restorandan buyurtma qilmoqchisiz?",
+    restaurantKeyboard()
+  );
 }
 
-/* WEB ADMIN PANEL */
+/* ===================== WEB ADMIN PANEL ===================== */
+
 app.get("/", (req, res) => {
-  res.send("BotFlow AI is running 🚀");
+  res.send("BotFlow AI is running 🚀 Open /admin");
 });
 
 app.get("/admin", async (req, res) => {
@@ -294,8 +297,10 @@ app.get("/admin", async (req, res) => {
   const rows = orders
     .slice()
     .reverse()
-    .map(
-      (o) => `
+    .map((o) => {
+      const date = o.createdAt ? new Date(o.createdAt).toLocaleString("ru-RU") : "-";
+
+      return `
       <tr>
         <td>${o.orderId}</td>
         <td>${o.restaurant}</td>
@@ -303,10 +308,41 @@ app.get("/admin", async (req, res) => {
         <td>${o.phone}</td>
         <td>${o.address}</td>
         <td>${money(o.total || 0)}</td>
-        <td>${o.status || "Yangi"}</td>
-        <td>${new Date(o.createdAt).toLocaleString("ru-RU")}</td>
-      </tr>`
-    )
+        <td><b>${o.status || "Yangi"}</b></td>
+        <td>${date}</td>
+        <td>
+          <form method="POST" action="/admin/status" style="display:inline">
+            <input type="hidden" name="orderId" value="${o.orderId}" />
+            <input type="hidden" name="status" value="✅ Qabul qilindi" />
+            <button class="btn green">Qabul</button>
+          </form>
+
+          <form method="POST" action="/admin/status" style="display:inline">
+            <input type="hidden" name="orderId" value="${o.orderId}" />
+            <input type="hidden" name="status" value="👨‍🍳 Tayyorlanmoqda" />
+            <button class="btn orange">Tayyorlanmoqda</button>
+          </form>
+
+          <form method="POST" action="/admin/status" style="display:inline">
+            <input type="hidden" name="orderId" value="${o.orderId}" />
+            <input type="hidden" name="status" value="🚗 Yo‘lda" />
+            <button class="btn blue">Yo‘lda</button>
+          </form>
+
+          <form method="POST" action="/admin/status" style="display:inline">
+            <input type="hidden" name="orderId" value="${o.orderId}" />
+            <input type="hidden" name="status" value="🎉 Yetkazildi" />
+            <button class="btn purple">Yetkazildi</button>
+          </form>
+
+          <form method="POST" action="/admin/status" style="display:inline">
+            <input type="hidden" name="orderId" value="${o.orderId}" />
+            <input type="hidden" name="status" value="❌ Bekor qilindi" />
+            <button class="btn red">Bekor</button>
+          </form>
+        </td>
+      </tr>`;
+    })
     .join("");
 
   res.send(`
@@ -316,18 +352,88 @@ app.get("/admin", async (req, res) => {
   <meta charset="UTF-8" />
   <title>BotFlow Admin</title>
   <style>
-    body { font-family: Arial; background:#f4f6f8; padding:24px; }
-    h1 { margin-bottom:8px; }
-    .cards { display:flex; gap:16px; margin:20px 0; }
-    .card { background:white; padding:18px; border-radius:14px; box-shadow:0 3px 12px #0001; min-width:180px; }
-    table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; }
-    th, td { padding:12px; border-bottom:1px solid #eee; text-align:left; font-size:14px; }
-    th { background:#111827; color:white; }
+    body {
+      font-family: Arial, sans-serif;
+      background:#f4f6f8;
+      padding:24px;
+      color:#111827;
+    }
+
+    h1 {
+      margin-bottom:8px;
+      font-size:34px;
+    }
+
+    .cards {
+      display:flex;
+      gap:16px;
+      margin:20px 0;
+      flex-wrap:wrap;
+    }
+
+    .card {
+      background:white;
+      padding:18px;
+      border-radius:16px;
+      box-shadow:0 3px 12px #0001;
+      min-width:180px;
+      font-size:20px;
+    }
+
+    table {
+      width:100%;
+      border-collapse:collapse;
+      background:white;
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:0 3px 12px #0001;
+    }
+
+    th, td {
+      padding:12px;
+      border-bottom:1px solid #eee;
+      text-align:left;
+      font-size:14px;
+      vertical-align:top;
+    }
+
+    th {
+      background:#111827;
+      color:white;
+    }
+
+    .btn {
+      border:none;
+      color:white;
+      padding:7px 10px;
+      border-radius:8px;
+      cursor:pointer;
+      margin:2px;
+      font-size:12px;
+    }
+
+    .green { background:#16a34a; }
+    .orange { background:#f97316; }
+    .blue { background:#2563eb; }
+    .purple { background:#7c3aed; }
+    .red { background:#dc2626; }
+
+    .refresh {
+      display:inline-block;
+      margin:10px 0 20px;
+      background:#111827;
+      color:white;
+      padding:10px 14px;
+      border-radius:10px;
+      text-decoration:none;
+    }
   </style>
 </head>
 <body>
   <h1>🚀 BotFlow Admin Panel</h1>
   <p>Restaurant SaaS MVP dashboard</p>
+
+  <a class="refresh" href="/admin">🔄 Refresh</a>
 
   <div class="cards">
     <div class="card"><b>🛒 Orders</b><br>${orders.length}</div>
@@ -346,6 +452,7 @@ app.get("/admin", async (req, res) => {
         <th>Total</th>
         <th>Status</th>
         <th>Date</th>
+        <th>Admin Action</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -355,7 +462,26 @@ app.get("/admin", async (req, res) => {
 `);
 });
 
-/* TELEGRAM BOT */
+app.post("/admin/status", async (req, res) => {
+  const { orderId, status } = req.body;
+
+  const order = await updateOrderStatus(orderId, status);
+
+  if (order && order.chatId) {
+    await bot.sendMessage(
+      order.chatId,
+      `📌 Buyurtma holati yangilandi:
+
+🏷 ${order.orderId}
+${status}`
+    );
+  }
+
+  res.redirect("/admin");
+});
+
+/* ===================== TELEGRAM BOT ===================== */
+
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   resetSession(chatId);
@@ -399,6 +525,7 @@ bot.onText(/\/clients/, async (msg) => {
 bot.onText(/\/last/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
   const orders = await getOrders();
+
   if (orders.length === 0) return bot.sendMessage(msg.chat.id, "Orderlar yo‘q.");
 
   const last = orders[orders.length - 1];
@@ -472,6 +599,7 @@ bot.on("message", async (msg) => {
     const bookingId = "BRON-" + Date.now().toString().slice(-5);
 
     await bot.sendMessage(chatId, `✅ Bron qabul qilindi!\n\n🏷 Bron raqami: ${bookingId}`);
+
     await bot.sendMessage(
       ADMIN_CHAT_ID,
       `🪑 YANGI BRON
@@ -522,7 +650,10 @@ Tasdiqlaysizmi?`,
     return bot.sendMessage(chatId, aiText);
   } catch (error) {
     console.log("AI error:", error.message);
-    return bot.sendMessage(chatId, "🤖 Hozircha tushunmadim. Buyurtma uchun 📋 Menu ni bosing.");
+    return bot.sendMessage(
+      chatId,
+      "🤖 Hozircha tushunmadim. Buyurtma uchun 📋 Menu ni bosing."
+    );
   }
 });
 
@@ -536,6 +667,7 @@ bot.on("callback_query", async (query) => {
   if (data.startsWith("restaurant_")) {
     const restaurantId = data.replace("restaurant_", "");
     const restaurant = restaurants[restaurantId];
+
     if (!restaurant) return bot.sendMessage(chatId, "Restoran topilmadi.");
 
     session.restaurantId = restaurantId;
@@ -552,10 +684,18 @@ bot.on("callback_query", async (query) => {
 
     const key = data.replace("food_", "");
     const item = restaurant.menu[key];
+
     if (!item) return bot.sendMessage(chatId, "Mahsulot topilmadi.");
 
     session.items.push(item);
-    return bot.sendMessage(chatId, `✅ ${item.name} savatga qo‘shildi.\n\n${summary(session)}`, cartKeyboard());
+
+    return bot.sendMessage(
+      chatId,
+      `✅ ${item.name} savatga qo‘shildi.
+
+${summary(session)}`,
+      cartKeyboard()
+    );
   }
 
   if (data === "more") {
@@ -590,7 +730,7 @@ bot.on("callback_query", async (query) => {
     const restaurant = getRestaurant(session);
     if (!restaurant) return askRestaurant(chatId);
 
-    const orderId = "ORDER-" + orderCounter++;
+    const orderId = "ORDER-" + Date.now().toString().slice(-6);
     const orderTotal = total(session);
 
     const order = {
@@ -609,7 +749,13 @@ bot.on("callback_query", async (query) => {
 
     await saveOrder(order);
 
-    await bot.sendMessage(chatId, `✅ Buyurtmangiz qabul qilindi!\n\n🏷 Buyurtma raqami: ${orderId}`);
+    await bot.sendMessage(
+      chatId,
+      `✅ Buyurtmangiz qabul qilindi!
+
+🏷 Buyurtma raqami: ${orderId}
+🏪 Restoran: ${restaurant.name}`
+    );
 
     await bot.sendMessage(
       ADMIN_CHAT_ID,
@@ -648,12 +794,13 @@ ${summary(session)}
     const customerChatId = parts[3];
 
     let statusText = "📌 Buyurtma statusi yangilandi.";
-    if (action === "accept") statusText = "✅ Buyurtmangiz qabul qilindi.";
-    if (action === "delivery") statusText = "🚚 Buyurtmangiz yo‘lga chiqdi.";
-    if (action === "cancel") statusText = "❌ Buyurtmangiz bekor qilindi.";
+    if (action === "accept") statusText = "✅ Qabul qilindi";
+    if (action === "delivery") statusText = "🚗 Yo‘lda";
+    if (action === "cancel") statusText = "❌ Bekor qilindi";
 
     await updateOrderStatus(orderId, statusText);
-    await bot.sendMessage(customerChatId, statusText);
+
+    await bot.sendMessage(customerChatId, `📌 Buyurtma holati:\n${statusText}`);
     await bot.sendMessage(chatId, `📌 ${orderId} statusi yangilandi:\n${statusText}`);
     return;
   }
@@ -665,4 +812,4 @@ app.listen(PORT, () => {
   console.log(`🌐 Admin panel ishlayapti: port ${PORT}`);
 });
 
-console.log("🚀 BotFlow Admin Panel SaaS ishlayapti...");
+console.log("🚀 BotFlow Admin Control SaaS ishlayapti...");
