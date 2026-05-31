@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
 
 if (!process.env.BOT_TOKEN) {
-  console.error("❌ BOT_TOKEN topilmadi");
+  console.error("❌ BOT_TOKEN topilmadi. .env yoki Railway Variables ni tekshiring.");
   process.exit(1);
 }
 
@@ -33,9 +33,13 @@ adminRoutes(app, bot);
 app.get("/", (req, res) => {
   res.send(`
     <h1>🚀 BotFlow AI SaaS ishlayapti</h1>
+
     <p><a href="/admin">Admin panel</a></p>
+
     <p><a href="/admin/burger">Burger owner panel</a></p>
+
     <p><a href="/admin/sushi">Sushi owner panel</a></p>
+
     <p><a href="/admin/coffee">Coffee owner panel</a></p>
   `);
 });

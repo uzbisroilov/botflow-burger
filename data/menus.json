@@ -1,0 +1,69 @@
+{
+  "burger": {
+    "id": "burger",
+    "name": "🍔 BotFlow Burger",
+    "phone": "+998901112233",
+    "address": "Toshkent",
+    "maps": "https://maps.google.com",
+    "menu": {
+      "burger": {
+        "name": "🍔 Classic Burger",
+        "price": 32000
+      },
+      "cheeseburger": {
+        "name": "🧀 Cheese Burger",
+        "price": 38000
+      },
+      "cola": {
+        "name": "🥤 Cola",
+        "price": 10000
+      },
+      "fries": {
+        "name": "🍟 Fri",
+        "price": 15000
+      }
+    }
+  },
+  "sushi": {
+    "id": "sushi",
+    "name": "🍣 Sushi Master",
+    "phone": "+998907778899",
+    "address": "Toshkent",
+    "maps": "https://maps.google.com",
+    "menu": {
+      "california": {
+        "name": "🍣 California",
+        "price": 48000
+      },
+      "philadelphia": {
+        "name": "🍱 Philadelphia",
+        "price": 55000
+      },
+      "cola": {
+        "name": "🥤 Cola",
+        "price": 10000
+      }
+    }
+  },
+  "coffee": {
+    "id": "coffee",
+    "name": "☕ Coffee Time",
+    "phone": "+998909998877",
+    "address": "Toshkent",
+    "maps": "https://maps.google.com",
+    "menu": {
+      "americano": {
+        "name": "☕ Americano",
+        "price": 18000
+      },
+      "latte": {
+        "name": "🥛 Latte",
+        "price": 26000
+      },
+      "cheesecake": {
+        "name": "🍰 Cheesecake",
+        "price": 32000
+      }
+    }
+  }
+}
