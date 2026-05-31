@@ -1,11 +1,8 @@
 const { getMenus } = require("../services/menuService");
-
-let restaurants = {};
-const { getMenus } = require("../services/menuService");
-let restaurants = {};
 const { saveOrder, updateOrderStatus, STATUSES } = require("../services/orderService");
 const { aiWaiterReply } = require("../services/aiService");
 const { createPaymentLink } = require("../services/paymentService");
+let restaurants = {};
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const sessions = {};
