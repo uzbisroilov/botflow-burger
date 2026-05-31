@@ -19,6 +19,7 @@ function getSession(chatId) {
       address: "",
     };
   }
+
   return sessions[chatId];
 }
 
@@ -157,12 +158,36 @@ function askRestaurant(bot, chatId) {
   return bot.sendMessage(chatId, "🏪 Restoran tanlang:", restaurantKeyboard());
 }
 
+function openRestaurantFromDeepLink(bot, chatId, restaurantId) {
+  const restaurant = restaurants[restaurantId];
+
+  if (!restaurant) {
+    bot.sendMessage(chatId, "Restoran topilmadi. Quyidagilardan birini tanlang:", restaurantKeyboard());
+    return;
+  }
+
+  const session = getSession(chatId);
+  session.restaurantId = restaurantId;
+  session.items = [];
+  session.step = "idle";
+
+  bot.sendMessage(
+    chatId,
+    `🚀 BotFlow AI
+
+${restaurant.name} ga xush kelibsiz!`,
+    mainKeyboard()
+  );
+
+  return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
+}
+
 function registerBot(bot) {
   bot.onText(/\/id/, (msg) => {
     bot.sendMessage(msg.chat.id, `🆔 Chat ID: ${msg.chat.id}`);
   });
 
-  bot.onText(/\/start/, (msg) => {
+  bot.onText(/\/start(.*)/, (msg, match) => {
     const chatId = msg.chat.id;
 
     if (isAdminGroup(chatId)) {
@@ -170,6 +195,13 @@ function registerBot(bot) {
     }
 
     resetSession(chatId);
+
+    const payload = (match && match[1] ? match[1] : "").trim();
+
+    if (payload.startsWith("restaurant_")) {
+      const restaurantId = payload.replace("restaurant_", "");
+      return openRestaurantFromDeepLink(bot, chatId, restaurantId);
+    }
 
     bot.sendMessage(
       chatId,
@@ -182,7 +214,7 @@ function registerBot(bot) {
       mainKeyboard()
     );
 
-    bot.sendMessage(chatId, "🏪 Restoran tanlang:", restaurantKeyboard());
+    return askRestaurant(bot, chatId);
   });
 
   bot.on("message", async (msg) => {
@@ -251,6 +283,7 @@ function registerBot(bot) {
       return bot.sendMessage(chatId, aiText);
     } catch (error) {
       console.log("AI error:", error.message);
+
       return bot.sendMessage(
         chatId,
         "Buyurtma berish uchun 📋 Menu ni bosing yoki 🏪 Restoran tanlang."
@@ -292,6 +325,10 @@ function registerBot(bot) {
 
       const restaurant = restaurants[restaurantId];
 
+      if (!restaurant) {
+        return bot.sendMessage(chatId, "Restoran topilmadi.", restaurantKeyboard());
+      }
+
       return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
     }
 
@@ -304,6 +341,10 @@ function registerBot(bot) {
 
       const key = data.replace("food_", "");
       const item = restaurant.menu[key];
+
+      if (!item) {
+        return bot.sendMessage(chatId, "Mahsulot topilmadi.");
+      }
 
       session.items.push(item);
 
