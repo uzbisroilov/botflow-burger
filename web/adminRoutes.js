@@ -55,7 +55,38 @@ function analytics(orders) {
   const cancelled = orders.filter((o) => o.status === "❌ Bekor qilindi").length;
   const active = orders.filter((o) => !isClosed(o.status)).length;
 
-  return { revenue, delivered, cancelled, active };
+  const productStats = {};
+  const restaurantStats = {};
+  const paymentStats = {};
+
+  orders.forEach((order) => {
+    restaurantStats[order.restaurant] = (restaurantStats[order.restaurant] || 0) + 1;
+    paymentStats[paymentLabel(order)] = (paymentStats[paymentLabel(order)] || 0) + 1;
+
+    (order.items || []).forEach((item) => {
+      productStats[item.name] = (productStats[item.name] || 0) + 1;
+    });
+  });
+
+  const topProduct =
+    Object.entries(productStats).sort((a, b) => b[1] - a[1])[0] || ["—", 0];
+
+  const topRestaurant =
+    Object.entries(restaurantStats).sort((a, b) => b[1] - a[1])[0] || ["—", 0];
+
+  const paymentList = Object.entries(paymentStats)
+    .map(([name, count]) => `<li>${name}: <b>${count}</b></li>`)
+    .join("");
+
+  return {
+    revenue,
+    delivered,
+    cancelled,
+    active,
+    topProduct,
+    topRestaurant,
+    paymentList,
+  };
 }
 
 function restaurantLinksHtml() {
@@ -71,14 +102,26 @@ function restaurantLinksHtml() {
       return `
         <div class="qr-card">
           <h3>${r.name}</h3>
-          <p><b>General menu:</b><br><a href="${base}" target="_blank">${base}</a></p>
-          <p><b>Table 1:</b><br><a href="${table1}" target="_blank">${table1}</a></p>
-          <p><b>Table 2:</b><br><a href="${table2}" target="_blank">${table2}</a></p>
-          <p><b>Table 3:</b><br><a href="${table3}" target="_blank">${table3}</a></p>
+
+          <p><b>Owner panel:</b><br>
+          <a href="/admin/${r.id}" target="_blank">/admin/${r.id}</a></p>
+
+          <p><b>General menu:</b><br>
+          <a href="${base}" target="_blank">${base}</a></p>
+
+          <p><b>Table 1:</b><br>
+          <a href="${table1}" target="_blank">${table1}</a></p>
+
+          <p><b>Table 2:</b><br>
+          <a href="${table2}" target="_blank">${table2}</a></p>
+
+          <p><b>Table 3:</b><br>
+          <a href="${table3}" target="_blank">${table3}</a></p>
 
           <p>
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(table1)}" />
           </p>
+
           <small>QR sample: Table 1</small>
         </div>
       `;
@@ -86,43 +129,41 @@ function restaurantLinksHtml() {
     .join("");
 }
 
-function adminRoutes(app, bot) {
-  app.get("/admin", async (req, res) => {
-    const orders = await getOrders();
-    const a = analytics(orders);
+function ordersRows(orders, showRestaurant = true, showActions = true) {
+  return orders
+    .slice()
+    .reverse()
+    .map((o) => {
+      const date = o.createdAt ? new Date(o.createdAt).toLocaleString("ru-RU") : "-";
 
-    const rows = orders
-      .slice()
-      .reverse()
-      .map((o) => {
-        const date = o.createdAt ? new Date(o.createdAt).toLocaleString("ru-RU") : "-";
-
-        return `
+      return `
 <tr>
   <td>${o.orderId}</td>
-  <td>${o.restaurant}</td>
+  ${showRestaurant ? `<td>${o.restaurant}</td>` : ""}
   <td>${o.table || "—"}</td>
-  <td>${o.customer}</td>
-  <td>${o.phone}</td>
-  <td>${o.address}</td>
+  <td>${o.customer || "—"}</td>
+  <td>${o.phone || "—"}</td>
+  <td>${o.address || "—"}</td>
   <td>${orderItemsText(o)}</td>
   <td>${money(o.total)}</td>
   <td>${paymentLabel(o)}</td>
   <td><b>${o.status || "Yangi"}</b></td>
   <td>${date}</td>
-  <td>${actionButtons(o)}</td>
+  ${showActions ? `<td>${actionButtons(o)}</td>` : ""}
 </tr>
 `;
-      })
-      .join("");
+    })
+    .join("");
+}
 
-    res.send(`
+function pageLayout(title, subtitle, bodyHtml) {
+  return `
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="refresh" content="20">
-<title>BotFlow Admin</title>
+<title>${title}</title>
 <style>
 body{
   font-family:Arial;
@@ -211,21 +252,44 @@ button{
   text-decoration:none;
   margin-bottom:15px;
 }
+a{
+  color:#2563eb;
+}
 </style>
 </head>
 <body>
+<h1>${title}</h1>
+<div class="subtitle">${subtitle}</div>
+<a class="refresh" href="">🔄 Refresh</a>
+${bodyHtml}
+</body>
+</html>
+`;
+}
 
-<h1>🚀 BotFlow Admin Panel</h1>
-<div class="subtitle">QR Menu + Table Order System</div>
+function adminRoutes(app, bot) {
+  app.get("/admin", async (req, res) => {
+    const orders = await getOrders();
+    const a = analytics(orders);
 
-<a class="refresh" href="/admin">🔄 Refresh</a>
-
+    const body = `
 <div class="cards">
   <div class="card">🛒 Orders<br><br><b>${orders.length}</b></div>
   <div class="card">🟡 Active<br><br><b>${a.active}</b></div>
   <div class="card">🎉 Delivered<br><br><b>${a.delivered}</b></div>
   <div class="card">❌ Cancelled<br><br><b>${a.cancelled}</b></div>
   <div class="card">💰 Revenue<br><br><b>${money(a.revenue)}</b></div>
+</div>
+
+<div class="panel">
+  <h3>🏆 Top mahsulot</h3>
+  <p>${a.topProduct[0]} — <b>${a.topProduct[1]}</b> ta</p>
+
+  <h3>🏪 Top restoran</h3>
+  <p>${a.topRestaurant[0]} — <b>${a.topRestaurant[1]}</b> order</p>
+
+  <h3>💳 Payment statistics</h3>
+  <ul>${a.paymentList || "<li>Ma’lumot yo‘q</li>"}</ul>
 </div>
 
 <div class="panel">
@@ -254,25 +318,85 @@ button{
 </tr>
 </thead>
 <tbody>
-${rows}
+${ordersRows(orders, true, true)}
 </tbody>
 </table>
+`;
 
-</body>
-</html>
-`);
+    res.send(pageLayout("🚀 BotFlow Admin Panel", "QR Menu + Table Order + Multi Restaurant SaaS", body));
+  });
+
+  app.get("/admin/:restaurantId", async (req, res) => {
+    const restaurantId = req.params.restaurantId;
+    const restaurant = restaurants[restaurantId];
+
+    if (!restaurant) {
+      return res.send(pageLayout("Restaurant not found", "Bunday restoran topilmadi", ""));
+    }
+
+    const allOrders = await getOrders();
+    const orders = allOrders.filter((o) => o.restaurantId === restaurantId);
+    const a = analytics(orders);
+
+    const body = `
+<div class="cards">
+  <div class="card">🛒 Orders<br><br><b>${orders.length}</b></div>
+  <div class="card">🟡 Active<br><br><b>${a.active}</b></div>
+  <div class="card">🎉 Delivered<br><br><b>${a.delivered}</b></div>
+  <div class="card">❌ Cancelled<br><br><b>${a.cancelled}</b></div>
+  <div class="card">💰 Revenue<br><br><b>${money(a.revenue)}</b></div>
+</div>
+
+<div class="panel">
+  <h2>🔗 ${restaurant.name} QR Links</h2>
+  <p>
+    General: https://t.me/botflow_support_bot?start=restaurant_${restaurant.id}
+  </p>
+  <p>
+    Table 1: https://t.me/botflow_support_bot?start=restaurant_${restaurant.id}_table_1
+  </p>
+  <p>
+    Table 2: https://t.me/botflow_support_bot?start=restaurant_${restaurant.id}_table_2
+  </p>
+  <p>
+    Table 3: https://t.me/botflow_support_bot?start=restaurant_${restaurant.id}_table_3
+  </p>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Table</th>
+<th>Customer</th>
+<th>Phone</th>
+<th>Address</th>
+<th>Items</th>
+<th>Total</th>
+<th>Payment</th>
+<th>Status</th>
+<th>Date</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+${ordersRows(orders, false, true)}
+</tbody>
+</table>
+`;
+
+    res.send(pageLayout(`${restaurant.name} Owner Panel`, "Restaurant owner dashboard", body));
   });
 
   app.post("/admin/status", async (req, res) => {
     const { orderId, status } = req.body;
-
     const order = await updateOrderStatus(orderId, status);
 
     if (order && order.chatId) {
       await bot.sendMessage(order.chatId, `📌 Buyurtma holati:\n\n${order.status}`);
     }
 
-    res.redirect("/admin");
+    res.redirect(req.headers.referer || "/admin");
   });
 }
 
