@@ -76,6 +76,18 @@ const restaurants = {
 
 const sessions = {};
 
+const STATUSES = {
+  accepted: "✅ Qabul qilindi",
+  cooking: "👨‍🍳 Tayyorlanmoqda",
+  delivery: "🚗 Yo‘lda",
+  delivered: "🎉 Yetkazildi",
+  cancelled: "❌ Bekor qilindi",
+};
+
+function isClosedOrder(status) {
+  return status === STATUSES.delivered || status === STATUSES.cancelled;
+}
+
 async function ensureDataFile() {
   await fs.ensureDir("./data");
   if (!(await fs.pathExists(ORDERS_FILE))) {
@@ -101,8 +113,9 @@ async function saveOrder(order) {
 async function updateOrderStatus(orderId, status) {
   const orders = await getOrders();
   const order = orders.find((o) => o.orderId === orderId);
-
   if (!order) return null;
+
+  if (isClosedOrder(order.status)) return order;
 
   order.status = status;
   order.updatedAt = new Date().toISOString();
@@ -233,43 +246,53 @@ function cartKeyboard() {
   };
 }
 
-function isClosedOrder(status) {
-  return status === "❌ Bekor qilindi" || status === "🎉 Yetkazildi";
+function statusKeyboard(orderId, chatId, currentStatus = "Yangi") {
+  if (isClosedOrder(currentStatus)) return undefined;
+
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Qabul", callback_data: `status_accepted_${orderId}_${chatId}` },
+          { text: "👨‍🍳 Tayyorlanmoqda", callback_data: `status_cooking_${orderId}_${chatId}` },
+        ],
+        [
+          { text: "🚗 Yo‘lda", callback_data: `status_delivery_${orderId}_${chatId}` },
+          { text: "🎉 Yetkazildi", callback_data: `status_delivered_${orderId}_${chatId}` },
+        ],
+        [{ text: "❌ Bekor", callback_data: `status_cancelled_${orderId}_${chatId}` }],
+      ],
+    },
+  };
 }
 
 function adminActionsHtml(order) {
-  if (isClosedOrder(order.status)) {
-    return `<span class="closed">Yakunlangan</span>`;
-  }
+  if (isClosedOrder(order.status)) return `<span class="closed">Yakunlangan</span>`;
 
   return `
     <form method="POST" action="/admin/status" style="display:inline">
       <input type="hidden" name="orderId" value="${order.orderId}" />
-      <input type="hidden" name="status" value="✅ Qabul qilindi" />
+      <input type="hidden" name="status" value="${STATUSES.accepted}" />
       <button class="btn green">Qabul</button>
     </form>
-
     <form method="POST" action="/admin/status" style="display:inline">
       <input type="hidden" name="orderId" value="${order.orderId}" />
-      <input type="hidden" name="status" value="👨‍🍳 Tayyorlanmoqda" />
+      <input type="hidden" name="status" value="${STATUSES.cooking}" />
       <button class="btn orange">Tayyorlanmoqda</button>
     </form>
-
     <form method="POST" action="/admin/status" style="display:inline">
       <input type="hidden" name="orderId" value="${order.orderId}" />
-      <input type="hidden" name="status" value="🚗 Yo‘lda" />
+      <input type="hidden" name="status" value="${STATUSES.delivery}" />
       <button class="btn blue">Yo‘lda</button>
     </form>
-
     <form method="POST" action="/admin/status" style="display:inline">
       <input type="hidden" name="orderId" value="${order.orderId}" />
-      <input type="hidden" name="status" value="🎉 Yetkazildi" />
+      <input type="hidden" name="status" value="${STATUSES.delivered}" />
       <button class="btn purple">Yetkazildi</button>
     </form>
-
     <form method="POST" action="/admin/status" style="display:inline">
       <input type="hidden" name="orderId" value="${order.orderId}" />
-      <input type="hidden" name="status" value="❌ Bekor qilindi" />
+      <input type="hidden" name="status" value="${STATUSES.cancelled}" />
       <button class="btn red">Bekor</button>
     </form>
   `;
@@ -277,17 +300,18 @@ function adminActionsHtml(order) {
 
 async function sendStatistics(chatId) {
   const orders = await getOrders();
-
   if (orders.length === 0) return bot.sendMessage(chatId, "📊 Hali orderlar yo‘q.");
 
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const clients = new Set(orders.map((o) => o.phone));
+  const active = orders.filter((o) => !isClosedOrder(o.status)).length;
 
   return bot.sendMessage(
     chatId,
     `📊 BotFlow statistikasi:
 
 🛒 Jami orderlar: ${orders.length}
+🟡 Active: ${active}
 👥 Klientlar: ${clients.size}
 💰 Jami savdo: ${money(revenue)}`
   );
@@ -323,14 +347,10 @@ ${menuInfo}
 }
 
 function askRestaurant(chatId) {
-  return bot.sendMessage(
-    chatId,
-    "🏪 Qaysi restorandan buyurtma qilmoqchisiz?",
-    restaurantKeyboard()
-  );
+  return bot.sendMessage(chatId, "🏪 Qaysi restorandan buyurtma qilmoqchisiz?", restaurantKeyboard());
 }
 
-/* ===================== WEB ADMIN PANEL ===================== */
+/* WEB ADMIN PANEL */
 
 app.get("/", (req, res) => {
   res.send("BotFlow AI is running 🚀 Open /admin");
@@ -341,8 +361,8 @@ app.get("/admin", async (req, res) => {
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
   const clients = new Set(orders.map((o) => o.phone));
   const activeOrders = orders.filter((o) => !isClosedOrder(o.status)).length;
-  const cancelledOrders = orders.filter((o) => o.status === "❌ Bekor qilindi").length;
-  const deliveredOrders = orders.filter((o) => o.status === "🎉 Yetkazildi").length;
+  const cancelledOrders = orders.filter((o) => o.status === STATUSES.cancelled).length;
+  const deliveredOrders = orders.filter((o) => o.status === STATUSES.delivered).length;
 
   const productStats = {};
   orders.forEach((order) => {
@@ -362,7 +382,6 @@ app.get("/admin", async (req, res) => {
     .reverse()
     .map((o) => {
       const date = o.createdAt ? new Date(o.createdAt).toLocaleString("ru-RU") : "-";
-
       return `
       <tr>
         <td>${o.orderId}</td>
@@ -407,7 +426,6 @@ app.get("/admin", async (req, res) => {
 <body>
   <h1>🚀 BotFlow Admin Panel</h1>
   <p>Restaurant SaaS MVP dashboard</p>
-
   <a class="refresh" href="/admin">🔄 Refresh</a>
 
   <div class="cards">
@@ -448,7 +466,6 @@ app.get("/admin", async (req, res) => {
 
 app.post("/admin/status", async (req, res) => {
   const { orderId, status } = req.body;
-
   const order = await updateOrderStatus(orderId, status);
 
   if (order && order.chatId) {
@@ -457,22 +474,19 @@ app.post("/admin/status", async (req, res) => {
       `📌 Buyurtma holati yangilandi:
 
 🏷 ${order.orderId}
-${status}`
+${order.status}`
     );
   }
 
   res.redirect("/admin");
 });
 
-/* ===================== TELEGRAM BOT ===================== */
+/* TELEGRAM BOT */
 
-// CHAT ID COMMAND
 bot.onText(/\/id/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    `🆔 Chat ID: ${msg.chat.id}`
-  );
+  bot.sendMessage(msg.chat.id, `🆔 Chat ID: ${msg.chat.id}`);
 });
+
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   resetSession(chatId);
@@ -516,7 +530,6 @@ bot.onText(/\/clients/, async (msg) => {
 bot.onText(/\/last/, async (msg) => {
   if (msg.chat.id.toString() !== ADMIN_CHAT_ID.toString()) return;
   const orders = await getOrders();
-
   if (orders.length === 0) return bot.sendMessage(msg.chat.id, "Orderlar yo‘q.");
 
   const last = orders[orders.length - 1];
@@ -641,10 +654,7 @@ Tasdiqlaysizmi?`,
     return bot.sendMessage(chatId, aiText);
   } catch (error) {
     console.log("AI error:", error.message);
-    return bot.sendMessage(
-      chatId,
-      "🤖 Hozircha tushunmadim. Buyurtma uchun 📋 Menu ni bosing."
-    );
+    return bot.sendMessage(chatId, "🤖 Hozircha tushunmadim. Buyurtma uchun 📋 Menu ni bosing.");
   }
 });
 
@@ -680,13 +690,7 @@ bot.on("callback_query", async (query) => {
 
     session.items.push(item);
 
-    return bot.sendMessage(
-      chatId,
-      `✅ ${item.name} savatga qo‘shildi.
-
-${summary(session)}`,
-      cartKeyboard()
-    );
+    return bot.sendMessage(chatId, `✅ ${item.name} savatga qo‘shildi.\n\n${summary(session)}`, cartKeyboard());
   }
 
   if (data === "more") {
@@ -761,17 +765,7 @@ ${summary(session)}
 
 📞 Telefon: ${session.phone}
 📍 Manzil: ${session.address}`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "✅ Qabul qilindi", callback_data: `status_accept_${orderId}_${chatId}` },
-              { text: "🚚 Yo‘lda", callback_data: `status_delivery_${orderId}_${chatId}` },
-            ],
-            [{ text: "❌ Bekor qilindi", callback_data: `status_cancel_${orderId}_${chatId}` }],
-          ],
-        },
-      }
+      statusKeyboard(orderId, chatId)
     );
 
     resetSession(chatId);
@@ -784,12 +778,16 @@ ${summary(session)}
     const orderId = parts[2];
     const customerChatId = parts[3];
 
-    let statusText = "📌 Buyurtma statusi yangilandi.";
-    if (action === "accept") statusText = "✅ Qabul qilindi";
-    if (action === "delivery") statusText = "🚗 Yo‘lda";
-    if (action === "cancel") statusText = "❌ Bekor qilindi";
+    const statusText = STATUSES[action] || "📌 Buyurtma statusi yangilandi.";
+    const order = await updateOrderStatus(orderId, statusText);
 
-    await updateOrderStatus(orderId, statusText);
+    if (!order) {
+      return bot.sendMessage(chatId, "Order topilmadi.");
+    }
+
+    if (isClosedOrder(order.status) && order.status !== statusText) {
+      return bot.sendMessage(chatId, "Bu order allaqachon yakunlangan.");
+    }
 
     await bot.sendMessage(customerChatId, `📌 Buyurtma holati:\n${statusText}`);
     await bot.sendMessage(chatId, `📌 ${orderId} statusi yangilandi:\n${statusText}`);
@@ -803,4 +801,4 @@ app.listen(PORT, () => {
   console.log(`🌐 Admin panel ishlayapti: port ${PORT}`);
 });
 
-console.log("🚀 BotFlow SaaS MAX MVP ishlayapti...");
+console.log("🚀 BotFlow Operator System SaaS ishlayapti...");
