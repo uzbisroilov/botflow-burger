@@ -45,12 +45,39 @@ function total(session) {
 
 function summary(session) {
   if (session.items.length === 0) return "🛒 Savat bo‘sh.";
+
   let text = "🧾 Buyurtma:\n\n";
   session.items.forEach((item, i) => {
     text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
   });
   text += `\n💰 Jami: ${money(total(session))}`;
   return text;
+}
+
+function upsellText(item, restaurant) {
+  const name = (item.name || "").toLowerCase();
+  const menu = restaurant ? restaurant.menu : {};
+
+  if (name.includes("burger")) {
+    if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
+    if (menu.fries) return "\n\n🤖 Tavsiya:\n🍟 Fri ham yaxshi ketadi.";
+  }
+
+  if (name.includes("lavash") || name.includes("hot dog")) {
+    if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
+  }
+
+  if (name.includes("latte") || name.includes("americano") || name.includes("cappuccino")) {
+    if (menu.cheesecake) return "\n\n🤖 Tavsiya:\n🍰 Cheesecake tavsiya qilamiz.";
+    if (menu.croissant) return "\n\n🤖 Tavsiya:\n🥐 Croissant ham qo‘shamizmi?";
+  }
+
+  if (name.includes("sushi") || name.includes("roll") || name.includes("california") || name.includes("philadelphia")) {
+    if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola yoki katta sushi set tavsiya qilamiz.";
+    return "\n\n🤖 Tavsiya:\n🍣 Katta set ham yaxshi tanlov.";
+  }
+
+  return "";
 }
 
 function mainKeyboard() {
@@ -344,11 +371,13 @@ function registerBot(bot) {
 
       session.items.push(item);
 
+      const upsell = upsellText(item, restaurant);
+
       return bot.sendMessage(
         chatId,
         `✅ ${item.name} qo‘shildi
 
-${summary(session)}`,
+${summary(session)}${upsell}`,
         cartKeyboard()
       );
     }
