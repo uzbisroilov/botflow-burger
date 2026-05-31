@@ -10,8 +10,10 @@ if (process.env.OPENAI_API_KEY) {
 
     console.log("🤖 OpenAI ulandi");
   } catch (error) {
-    console.log("❌ OpenAI error:", error.message);
+    console.log("❌ OpenAI init error:", error.message);
   }
+} else {
+  console.log("⚠️ OPENAI_API_KEY topilmadi");
 }
 
 function money(n) {
@@ -23,8 +25,8 @@ function money(n) {
 }
 
 async function aiWaiterReply(text, restaurant, restaurants) {
-  if (!openai) {
-    return "🤖 AI ulanmagan.";
+  if (!process.env.OPENAI_API_KEY || !openai) {
+    return "Buyurtma berish uchun 📋 Menu ni bosing yoki 🏪 Restoran tanlang.";
   }
 
   const menuInfo = restaurant
@@ -37,23 +39,20 @@ async function aiWaiterReply(text, restaurant, restaurants) {
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4.1-mini",
-
     messages: [
       {
         role: "system",
-
         content: `
 Sen BotFlow AI restoran operatorisan.
-
-Qisqa, sotuvchi va muloyim javob ber.
-
-Mijozga menu bo‘yicha tavsiya qil.
+O‘zbek tilida qisqa, muloyim va sotuvchi uslubda javob ber.
+Mijozga menyu bo‘yicha tavsiya ber.
+Buyurtma qilish uchun "📋 Menu" tugmasini bosishini ayt.
+Juda uzun yozma.
 
 Menyu:
 ${menuInfo}
 `,
       },
-
       {
         role: "user",
         content: text,
@@ -61,7 +60,7 @@ ${menuInfo}
     ],
   });
 
-  return completion.choices[0].message.content;
+  return completion.choices[0].message.content || "📋 Menu ni bosing.";
 }
 
 module.exports = {
