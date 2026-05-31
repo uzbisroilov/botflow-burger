@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
 
 if (!process.env.BOT_TOKEN) {
-  console.error("❌ BOT_TOKEN topilmadi. Railway Variables yoki .env ni tekshiring.");
+  console.error("❌ BOT_TOKEN topilmadi");
   process.exit(1);
 }
 
@@ -33,12 +33,15 @@ adminRoutes(app, bot);
 app.get("/", (req, res) => {
   res.send(`
     <h1>🚀 BotFlow AI SaaS ishlayapti</h1>
-    <p>Admin panel uchun: <a href="/admin">/admin</a></p>
+    <p><a href="/admin">Admin panel</a></p>
+    <p><a href="/admin/burger">Burger owner panel</a></p>
+    <p><a href="/admin/sushi">Sushi owner panel</a></p>
+    <p><a href="/admin/coffee">Coffee owner panel</a></p>
   `);
 });
 
 app.listen(PORT, () => {
-  console.log(`🌐 Admin panel port ${PORT} da ishlayapti`);
+  console.log(`🌐 Server port ${PORT} da ishlayapti`);
 });
 
 console.log("🚀 BotFlow Modular SaaS ishlayapti...");
