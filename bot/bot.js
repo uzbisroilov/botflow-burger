@@ -1,4 +1,8 @@
-const { restaurants } = require("../appconfig/restaurants");
+const { getMenus } = require("../services/menuService");
+
+let restaurants = {};
+const { getMenus } = require("../services/menuService");
+let restaurants = {};
 const { saveOrder, updateOrderStatus, STATUSES } = require("../services/orderService");
 const { aiWaiterReply } = require("../services/aiService");
 const { createPaymentLink } = require("../services/paymentService");
@@ -237,6 +241,11 @@ function parseStartPayload(payload) {
 }
 
 function registerBot(bot) {
+
+  getMenus().then((menus) => {
+    restaurants = menus;
+  });
+
   bot.onText(/\/id/, (msg) => {
     bot.sendMessage(msg.chat.id, `🆔 Chat ID: ${msg.chat.id}`);
   });
