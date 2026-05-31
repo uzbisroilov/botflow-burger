@@ -239,9 +239,14 @@ function parseStartPayload(payload) {
 
 function registerBot(bot) {
 
-  getMenus().then((menus) => {
-    restaurants = menus;
-  });
+  async function refreshMenus() {
+  restaurants = await getMenus();
+}
+
+refreshMenus();
+
+setInterval(refreshMenus, 5000);
+  ;
 
   bot.onText(/\/id/, (msg) => {
     bot.sendMessage(msg.chat.id, `🆔 Chat ID: ${msg.chat.id}`);
