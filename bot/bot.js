@@ -1,6 +1,7 @@
 const { restaurants } = require("../appconfig/restaurants");
 const { saveOrder, updateOrderStatus, STATUSES } = require("../services/orderService");
 const { aiWaiterReply } = require("../services/aiService");
+const { createPaymentLink } = require("../services/paymentService");
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 const sessions = {};
@@ -47,9 +48,11 @@ function summary(session) {
   if (session.items.length === 0) return "🛒 Savat bo‘sh.";
 
   let text = "🧾 Buyurtma:\n\n";
+
   session.items.forEach((item, i) => {
     text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
   });
+
   text += `\n💰 Jami: ${money(total(session))}`;
   return text;
 }
@@ -67,12 +70,21 @@ function upsellText(item, restaurant) {
     if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
   }
 
-  if (name.includes("latte") || name.includes("americano") || name.includes("cappuccino")) {
+  if (
+    name.includes("latte") ||
+    name.includes("americano") ||
+    name.includes("cappuccino")
+  ) {
     if (menu.cheesecake) return "\n\n🤖 Tavsiya:\n🍰 Cheesecake tavsiya qilamiz.";
     if (menu.croissant) return "\n\n🤖 Tavsiya:\n🥐 Croissant ham qo‘shamizmi?";
   }
 
-  if (name.includes("sushi") || name.includes("roll") || name.includes("california") || name.includes("philadelphia")) {
+  if (
+    name.includes("sushi") ||
+    name.includes("roll") ||
+    name.includes("california") ||
+    name.includes("philadelphia")
+  ) {
     if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola yoki katta sushi set tavsiya qilamiz.";
     return "\n\n🤖 Tavsiya:\n🍣 Katta set ham yaxshi tanlov.";
   }
@@ -106,19 +118,28 @@ function restaurantKeyboard() {
 
 function menuText(restaurant) {
   let text = `🍽 ${restaurant.name} MENU:\n\n`;
+
   Object.values(restaurant.menu).forEach((item) => {
     text += `${item.name} — ${money(item.price)}\n`;
   });
+
   return text;
 }
 
 function menuKeyboard(restaurant) {
   const buttons = [];
+
   Object.entries(restaurant.menu).forEach(([key, item]) => {
     buttons.push([{ text: item.name, callback_data: `food_${key}` }]);
   });
+
   buttons.push([{ text: "🧾 Savat", callback_data: "cart" }]);
-  return { reply_markup: { inline_keyboard: buttons } };
+
+  return {
+    reply_markup: {
+      inline_keyboard: buttons,
+    },
+  };
 }
 
 function cartKeyboard() {
@@ -427,6 +448,8 @@ ${summary(session)}${upsell}`,
 
       await saveOrder(order);
 
+      const paymentLink = createPaymentLink(order);
+
       await bot.sendMessage(
         chatId,
         `✅ Buyurtma qabul qilindi
@@ -435,7 +458,8 @@ ${summary(session)}${upsell}`,
 🏪 ${restaurant.name}
 ${session.table ? `🪑 Stol: ${session.table}` : ""}
 💰 ${money(order.total)}
-💳 To‘lov: ${paymentName(paymentType)}`
+💳 To‘lov: ${paymentName(paymentType)}
+${paymentLink ? `\n🔗 To‘lov linki:\n${paymentLink}` : ""}`
       );
 
       await bot.sendMessage(
@@ -450,6 +474,7 @@ ${session.table ? `🪑 Stol: ${session.table}` : ""}
 ${summary(session)}
 
 💳 To‘lov: ${paymentName(paymentType)}
+${paymentLink ? `\n🔗 Payment link: ${paymentLink}` : ""}
 📞 ${session.phone}
 📍 ${session.address}`,
         statusKeyboard(orderId, chatId)
