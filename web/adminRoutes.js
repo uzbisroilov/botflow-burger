@@ -1,18 +1,20 @@
-const {
-  getOrders,
-  updateOrderStatus,
-} = require("../services/orderService");
+const { getOrders, updateOrderStatus } = require("../services/orderService");
+const { restaurants } = require("../appconfig/restaurants");
 
 function money(n) {
-  return (
-    (n || 0)
-      .toString()
-      .replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m"
-  );
+  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
 }
 
 function isClosed(status) {
   return status === "🎉 Yetkazildi" || status === "❌ Bekor qilindi";
+}
+
+function paymentLabel(order) {
+  if (order.paymentName) return order.paymentName;
+  if (order.paymentType === "click") return "💳 Click";
+  if (order.paymentType === "payme") return "💳 Payme";
+  if (order.paymentType === "cash") return "💵 Naqd";
+  return "—";
 }
 
 function orderItemsText(order) {
@@ -47,68 +49,41 @@ function actionButtons(order) {
   `;
 }
 
-function paymentLabel(order) {
-  if (order.paymentName) return order.paymentName;
-  if (order.paymentType === "click") return "💳 Click";
-  if (order.paymentType === "payme") return "💳 Payme";
-  if (order.paymentType === "cash") return "💵 Naqd";
-  return "—";
-}
-
 function analytics(orders) {
   const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
-
   const delivered = orders.filter((o) => o.status === "🎉 Yetkazildi").length;
   const cancelled = orders.filter((o) => o.status === "❌ Bekor qilindi").length;
   const active = orders.filter((o) => !isClosed(o.status)).length;
 
-  const today = new Date().toISOString().slice(0, 10);
+  return { revenue, delivered, cancelled, active };
+}
 
-  const todayOrders = orders.filter((o) => {
-    return (o.createdAt || "").slice(0, 10) === today;
-  });
+function restaurantLinksHtml() {
+  const botUsername = "botflow_support_bot";
 
-  const todayRevenue = todayOrders.reduce((sum, order) => {
-    return sum + (order.total || 0);
-  }, 0);
+  return Object.values(restaurants)
+    .map((r) => {
+      const base = `https://t.me/${botUsername}?start=restaurant_${r.id}`;
+      const table1 = `https://t.me/${botUsername}?start=restaurant_${r.id}_table_1`;
+      const table2 = `https://t.me/${botUsername}?start=restaurant_${r.id}_table_2`;
+      const table3 = `https://t.me/${botUsername}?start=restaurant_${r.id}_table_3`;
 
-  const productStats = {};
-  const restaurantStats = {};
-  const paymentStats = {};
+      return `
+        <div class="qr-card">
+          <h3>${r.name}</h3>
+          <p><b>General menu:</b><br><a href="${base}" target="_blank">${base}</a></p>
+          <p><b>Table 1:</b><br><a href="${table1}" target="_blank">${table1}</a></p>
+          <p><b>Table 2:</b><br><a href="${table2}" target="_blank">${table2}</a></p>
+          <p><b>Table 3:</b><br><a href="${table3}" target="_blank">${table3}</a></p>
 
-  orders.forEach((order) => {
-    restaurantStats[order.restaurant] =
-      (restaurantStats[order.restaurant] || 0) + 1;
-
-    paymentStats[paymentLabel(order)] =
-      (paymentStats[paymentLabel(order)] || 0) + 1;
-
-    (order.items || []).forEach((item) => {
-      productStats[item.name] = (productStats[item.name] || 0) + 1;
-    });
-  });
-
-  const topProduct =
-    Object.entries(productStats).sort((a, b) => b[1] - a[1])[0] || ["—", 0];
-
-  const topRestaurant =
-    Object.entries(restaurantStats).sort((a, b) => b[1] - a[1])[0] || ["—", 0];
-
-  const paymentList = Object.entries(paymentStats)
-    .map(([name, count]) => `<li>${name}: <b>${count}</b></li>`)
+          <p>
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(table1)}" />
+          </p>
+          <small>QR sample: Table 1</small>
+        </div>
+      `;
+    })
     .join("");
-
-  return {
-    revenue,
-    delivered,
-    cancelled,
-    active,
-    todayRevenue,
-    todayOrders: todayOrders.length,
-    topProduct,
-    topRestaurant,
-    paymentList,
-  };
 }
 
 function adminRoutes(app, bot) {
@@ -120,14 +95,13 @@ function adminRoutes(app, bot) {
       .slice()
       .reverse()
       .map((o) => {
-        const date = o.createdAt
-          ? new Date(o.createdAt).toLocaleString("ru-RU")
-          : "-";
+        const date = o.createdAt ? new Date(o.createdAt).toLocaleString("ru-RU") : "-";
 
         return `
 <tr>
   <td>${o.orderId}</td>
   <td>${o.restaurant}</td>
+  <td>${o.table || "—"}</td>
   <td>${o.customer}</td>
   <td>${o.phone}</td>
   <td>${o.address}</td>
@@ -186,10 +160,17 @@ h1{
   margin-bottom:20px;
   box-shadow:0 3px 10px #0001;
 }
-.grid{
+.qr-grid{
   display:grid;
-  grid-template-columns:1fr 1fr 1fr;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
   gap:15px;
+}
+.qr-card{
+  background:white;
+  padding:16px;
+  border-radius:16px;
+  box-shadow:0 3px 10px #0001;
+  word-break:break-all;
 }
 table{
   width:100%;
@@ -235,7 +216,7 @@ button{
 <body>
 
 <h1>🚀 BotFlow Admin Panel</h1>
-<div class="subtitle">Professional Restaurant SaaS Dashboard</div>
+<div class="subtitle">QR Menu + Table Order System</div>
 
 <a class="refresh" href="/admin">🔄 Refresh</a>
 
@@ -245,23 +226,13 @@ button{
   <div class="card">🎉 Delivered<br><br><b>${a.delivered}</b></div>
   <div class="card">❌ Cancelled<br><br><b>${a.cancelled}</b></div>
   <div class="card">💰 Revenue<br><br><b>${money(a.revenue)}</b></div>
-  <div class="card">📅 Today Revenue<br><br><b>${money(a.todayRevenue)}</b></div>
 </div>
 
-<div class="grid">
-  <div class="panel">
-    <h3>🏆 Top mahsulot</h3>
-    <p>${a.topProduct[0]} — <b>${a.topProduct[1]}</b> ta</p>
-  </div>
-
-  <div class="panel">
-    <h3>🏪 Top restoran</h3>
-    <p>${a.topRestaurant[0]} — <b>${a.topRestaurant[1]}</b> order</p>
-  </div>
-
-  <div class="panel">
-    <h3>💳 Payment statistics</h3>
-    <ul>${a.paymentList || "<li>Ma’lumot yo‘q</li>"}</ul>
+<div class="panel">
+  <h2>🔗 QR Menu Links</h2>
+  <p>Bu QR linklarni stolga qo‘yish mumkin.</p>
+  <div class="qr-grid">
+    ${restaurantLinksHtml()}
   </div>
 </div>
 
@@ -270,6 +241,7 @@ button{
 <tr>
 <th>ID</th>
 <th>Restaurant</th>
+<th>Table</th>
 <th>Customer</th>
 <th>Phone</th>
 <th>Address</th>
@@ -297,10 +269,7 @@ ${rows}
     const order = await updateOrderStatus(orderId, status);
 
     if (order && order.chatId) {
-      await bot.sendMessage(
-        order.chatId,
-        `📌 Buyurtma holati:\n\n${order.status}`
-      );
+      await bot.sendMessage(order.chatId, `📌 Buyurtma holati:\n\n${order.status}`);
     }
 
     res.redirect("/admin");

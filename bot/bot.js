@@ -13,19 +13,20 @@ function getSession(chatId) {
   if (!sessions[chatId]) {
     sessions[chatId] = {
       restaurantId: null,
+      table: null,
       items: [],
       step: "idle",
       phone: "",
       address: "",
     };
   }
-
   return sessions[chatId];
 }
 
 function resetSession(chatId) {
   sessions[chatId] = {
     restaurantId: null,
+    table: null,
     items: [],
     step: "idle",
     phone: "",
@@ -44,13 +45,10 @@ function total(session) {
 
 function summary(session) {
   if (session.items.length === 0) return "🛒 Savat bo‘sh.";
-
   let text = "🧾 Buyurtma:\n\n";
-
   session.items.forEach((item, i) => {
     text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
   });
-
   text += `\n💰 Jami: ${money(total(session))}`;
   return text;
 }
@@ -81,28 +79,19 @@ function restaurantKeyboard() {
 
 function menuText(restaurant) {
   let text = `🍽 ${restaurant.name} MENU:\n\n`;
-
   Object.values(restaurant.menu).forEach((item) => {
     text += `${item.name} — ${money(item.price)}\n`;
   });
-
   return text;
 }
 
 function menuKeyboard(restaurant) {
   const buttons = [];
-
   Object.entries(restaurant.menu).forEach(([key, item]) => {
     buttons.push([{ text: item.name, callback_data: `food_${key}` }]);
   });
-
   buttons.push([{ text: "🧾 Savat", callback_data: "cart" }]);
-
-  return {
-    reply_markup: {
-      inline_keyboard: buttons,
-    },
-  };
+  return { reply_markup: { inline_keyboard: buttons } };
 }
 
 function cartKeyboard() {
@@ -158,16 +147,16 @@ function askRestaurant(bot, chatId) {
   return bot.sendMessage(chatId, "🏪 Restoran tanlang:", restaurantKeyboard());
 }
 
-function openRestaurantFromDeepLink(bot, chatId, restaurantId) {
+function openRestaurant(bot, chatId, restaurantId, table = null) {
   const restaurant = restaurants[restaurantId];
 
   if (!restaurant) {
-    bot.sendMessage(chatId, "Restoran topilmadi. Quyidagilardan birini tanlang:", restaurantKeyboard());
-    return;
+    return bot.sendMessage(chatId, "Restoran topilmadi.", restaurantKeyboard());
   }
 
   const session = getSession(chatId);
   session.restaurantId = restaurantId;
+  session.table = table;
   session.items = [];
   session.step = "idle";
 
@@ -175,11 +164,28 @@ function openRestaurantFromDeepLink(bot, chatId, restaurantId) {
     chatId,
     `🚀 BotFlow AI
 
-${restaurant.name} ga xush kelibsiz!`,
+${restaurant.name} ga xush kelibsiz!
+
+${table ? `🪑 Stol: ${table}` : ""}`,
     mainKeyboard()
   );
 
   return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
+}
+
+function parseStartPayload(payload) {
+  const parts = payload.split("_");
+
+  if (parts[0] !== "restaurant") return null;
+
+  const restaurantId = parts[1];
+  let table = null;
+
+  if (parts[2] === "table" && parts[3]) {
+    table = parts[3];
+  }
+
+  return { restaurantId, table };
 }
 
 function registerBot(bot) {
@@ -198,9 +204,12 @@ function registerBot(bot) {
 
     const payload = (match && match[1] ? match[1] : "").trim();
 
-    if (payload.startsWith("restaurant_")) {
-      const restaurantId = payload.replace("restaurant_", "");
-      return openRestaurantFromDeepLink(bot, chatId, restaurantId);
+    if (payload) {
+      const parsed = parseStartPayload(payload);
+
+      if (parsed) {
+        return openRestaurant(bot, chatId, parsed.restaurantId, parsed.table);
+      }
     }
 
     bot.sendMessage(
@@ -223,10 +232,7 @@ function registerBot(bot) {
     const text = rawText.toLowerCase().trim();
 
     if (!text || text.startsWith("/")) return;
-
-    if (isAdminGroup(chatId)) {
-      return;
-    }
+    if (isAdminGroup(chatId)) return;
 
     const session = getSession(chatId);
     const restaurant = getRestaurant(session);
@@ -241,24 +247,35 @@ function registerBot(bot) {
     }
 
     if (text.includes("menu")) {
-      if (!restaurant) {
-        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      }
-
+      if (!restaurant) return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
     }
 
     if (text.includes("savat")) {
-      if (session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-      }
-
+      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
     if (session.step === "phone") {
       session.phone = msg.text;
       session.step = "address";
+
+      if (session.table) {
+        session.address = `Restoran ichida, stol ${session.table}`;
+        session.step = "payment";
+
+        return bot.sendMessage(
+          chatId,
+          `${summary(session)}
+
+🪑 Stol: ${session.table}
+📞 Telefon: ${session.phone}
+
+💳 To‘lov turini tanlang:`,
+          paymentKeyboard()
+        );
+      }
+
       return bot.sendMessage(chatId, "📍 Manzil yuboring.");
     }
 
@@ -283,11 +300,7 @@ function registerBot(bot) {
       return bot.sendMessage(chatId, aiText);
     } catch (error) {
       console.log("AI error:", error.message);
-
-      return bot.sendMessage(
-        chatId,
-        "Buyurtma berish uchun 📋 Menu ni bosing yoki 🏪 Restoran tanlang."
-      );
+      return bot.sendMessage(chatId, "Buyurtma berish uchun 📋 Menu ni bosing yoki 🏪 Restoran tanlang.");
     }
   });
 
@@ -307,44 +320,27 @@ function registerBot(bot) {
       const statusText = STATUSES[action] || "📌 Status yangilandi";
 
       await updateOrderStatus(orderId, statusText);
-
       await bot.sendMessage(customerChatId, `📌 Buyurtma holati:\n\n${statusText}`);
       await bot.sendMessage(chatId, `✅ ${orderId}\n\n${statusText}`);
       return;
     }
 
-    if (isAdminGroup(chatId)) {
-      return;
-    }
+    if (isAdminGroup(chatId)) return;
 
     if (data.startsWith("restaurant_")) {
       const restaurantId = data.replace("restaurant_", "");
-      session.restaurantId = restaurantId;
-      session.items = [];
-      session.step = "idle";
-
-      const restaurant = restaurants[restaurantId];
-
-      if (!restaurant) {
-        return bot.sendMessage(chatId, "Restoran topilmadi.", restaurantKeyboard());
-      }
-
-      return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
+      return openRestaurant(bot, chatId, restaurantId, null);
     }
 
     if (data.startsWith("food_")) {
       const restaurant = getRestaurant(session);
 
-      if (!restaurant) {
-        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      }
+      if (!restaurant) return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
 
       const key = data.replace("food_", "");
       const item = restaurant.menu[key];
 
-      if (!item) {
-        return bot.sendMessage(chatId, "Mahsulot topilmadi.");
-      }
+      if (!item) return bot.sendMessage(chatId, "Mahsulot topilmadi.");
 
       session.items.push(item);
 
@@ -359,27 +355,17 @@ ${summary(session)}`,
 
     if (data === "more") {
       const restaurant = getRestaurant(session);
-
-      if (!restaurant) {
-        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      }
-
+      if (!restaurant) return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
     }
 
     if (data === "cart") {
-      if (session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-      }
-
+      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
     if (data === "finish") {
-      if (session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-      }
-
+      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       session.step = "phone";
       return bot.sendMessage(chatId, "📞 Telefon yuboring.");
     }
@@ -388,13 +374,8 @@ ${summary(session)}`,
       const paymentType = data.replace("payment_", "");
       const restaurant = getRestaurant(session);
 
-      if (!restaurant) {
-        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      }
-
-      if (session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-      }
+      if (!restaurant) return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
+      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
 
       const orderId = "ORDER-" + Date.now().toString().slice(-6);
 
@@ -402,6 +383,7 @@ ${summary(session)}`,
         orderId,
         restaurant: restaurant.name,
         restaurantId: restaurant.id,
+        table: session.table,
         customer: query.from.first_name || "Noma’lum",
         chatId,
         phone: session.phone,
@@ -422,6 +404,7 @@ ${summary(session)}`,
 
 🏷 ${orderId}
 🏪 ${restaurant.name}
+${session.table ? `🪑 Stol: ${session.table}` : ""}
 💰 ${money(order.total)}
 💳 To‘lov: ${paymentName(paymentType)}`
       );
@@ -432,6 +415,7 @@ ${summary(session)}`,
 
 🏷 ${orderId}
 🏪 ${restaurant.name}
+${session.table ? `🪑 Stol: ${session.table}` : ""}
 👤 ${order.customer}
 
 ${summary(session)}
