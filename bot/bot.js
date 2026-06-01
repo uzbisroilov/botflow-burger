@@ -29,6 +29,7 @@ function getSession(chatId) {
       address: "",
     };
   }
+
   return sessions[chatId];
 }
 
@@ -420,11 +421,15 @@ function registerBot(bot) {
       const image = await getImage(key);
 
       if (image) {
-        await bot.sendPhoto(chatId, image, {
-          caption: `🍽 ${item.name}
+        try {
+          await bot.sendPhoto(chatId, image, {
+            caption: `🍽 ${item.name}
 
 💰 ${money(item.price)}`,
-        });
+          });
+        } catch (error) {
+          console.log("Image send error:", error.message);
+        }
       }
 
       const upsell = upsellText(item, restaurant);
