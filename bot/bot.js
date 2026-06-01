@@ -12,7 +12,6 @@ const sessions = {};
 async function refreshMenus() {
   try {
     restaurants = await getMenus();
-    console.log("🍽 Menu yangilandi");
   } catch (error) {
     console.log("Menu refresh error:", error.message);
     restaurants = {};
@@ -146,14 +145,14 @@ function menuText(restaurant) {
     }
   });
 
-  return text || "❌ Menu bo‘sh.";
+  return text;
 }
 
 function menuKeyboard(restaurant) {
   if (!restaurant || !restaurant.menu) {
     return {
       reply_markup: {
-        inline_keyboard: [],
+        inline_keyboard: [[{ text: "🧾 Savat", callback_data: "cart" }]],
       },
     };
   }
@@ -278,7 +277,7 @@ function parseStartPayload(payload) {
 
 function registerBot(bot) {
   refreshMenus();
-  setInterval(refreshMenus, 3000);
+  setInterval(refreshMenus, 30000);
 
   bot.onText(/\/id/, (msg) => {
     bot.sendMessage(msg.chat.id, `🆔 Chat ID: ${msg.chat.id}`);
