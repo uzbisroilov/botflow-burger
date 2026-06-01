@@ -1,0 +1,16 @@
+{
+  "classic_burger": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
+  "cheese_burger": "https://images.unsplash.com/photo-1550547660-d9450f859349",
+  "cola": "https://images.unsplash.com/photo-1629203851122-3726ecdf080e",
+  "fries": "https://images.unsplash.com/photo-1576107232684-1279f390859f",
+
+  "latte": "https://images.unsplash.com/photo-1517701604599-bb29b565090c",
+  "americano": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085",
+  "cappuccino": "https://images.unsplash.com/photo-1509042239860-f550ce710b93",
+
+  "california_roll": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c",
+  "philadelphia_roll": "https://images.unsplash.com/photo-1553621042-f6e147245754",
+
+  "cheesecake": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad",
+  "croissant": "https://images.unsplash.com/photo-1509440159596-0249088772ff"
+}
