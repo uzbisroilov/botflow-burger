@@ -2,7 +2,6 @@ const { saveOrder, updateOrderStatus, STATUSES } = require("../services/orderSer
 const { aiWaiterReply } = require("../services/aiService");
 const { createPaymentLink } = require("../services/paymentService");
 const { getMenus } = require("../services/menuService");
-const { getImage } = require("../services/imageService");
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
@@ -79,13 +78,8 @@ function upsellText(item, restaurant) {
     if (menu.fries) return "\n\n🤖 Tavsiya:\n🍟 Fri ham yaxshi ketadi.";
   }
 
-  if (name.includes("lavash") || name.includes("hot dog")) {
-    if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
-  }
-
   if (name.includes("latte") || name.includes("americano") || name.includes("cappuccino")) {
     if (menu.cheesecake) return "\n\n🤖 Tavsiya:\n🍰 Cheesecake tavsiya qilamiz.";
-    if (menu.croissant) return "\n\n🤖 Tavsiya:\n🥐 Croissant ham qo‘shamizmi?";
   }
 
   if (
@@ -94,7 +88,6 @@ function upsellText(item, restaurant) {
     name.includes("california") ||
     name.includes("philadelphia")
   ) {
-    if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola yoki katta sushi set tavsiya qilamiz.";
     return "\n\n🤖 Tavsiya:\n🍣 Katta set ham yaxshi tanlov.";
   }
 
@@ -348,7 +341,10 @@ function registerBot(bot) {
     }
 
     if (text.includes("savat")) {
-      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) {
+        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      }
+
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
@@ -450,20 +446,6 @@ function registerBot(bot) {
 
       session.items.push(item);
 
-      const image = await getImage(key);
-
-      if (image) {
-        try {
-          await bot.sendPhoto(chatId, image, {
-            caption: `🍽 ${item.name}
-
-💰 ${money(item.price)}`,
-          });
-        } catch (error) {
-          console.log("Image send error:", error.message);
-        }
-      }
-
       const upsell = upsellText(item, restaurant);
 
       return bot.sendMessage(
@@ -486,12 +468,18 @@ ${summary(session)}${upsell}`,
     }
 
     if (data === "cart") {
-      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) {
+        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      }
+
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
     if (data === "finish") {
-      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) {
+        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      }
+
       session.step = "phone";
       return bot.sendMessage(chatId, "📞 Telefon yuboring.");
     }
@@ -500,8 +488,13 @@ ${summary(session)}${upsell}`,
       const paymentType = data.replace("payment_", "");
       const restaurant = getRestaurant(session);
 
-      if (!restaurant) return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!restaurant) {
+        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
+      }
+
+      if (!session.items || session.items.length === 0) {
+        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      }
 
       const orderId = "ORDER-" + Date.now().toString().slice(-6);
 
