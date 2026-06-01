@@ -2,6 +2,7 @@ const { saveOrder, updateOrderStatus, STATUSES } = require("../services/orderSer
 const { aiWaiterReply } = require("../services/aiService");
 const { createPaymentLink } = require("../services/paymentService");
 const { getMenus } = require("../services/menuService");
+const { getImage } = require("../services/imageService");
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
@@ -55,6 +56,7 @@ function summary(session) {
   if (session.items.length === 0) return "🛒 Savat bo‘sh.";
 
   let text = "🧾 Buyurtma:\n\n";
+
   session.items.forEach((item, i) => {
     text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
   });
@@ -76,11 +78,7 @@ function upsellText(item, restaurant) {
     if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
   }
 
-  if (
-    name.includes("latte") ||
-    name.includes("americano") ||
-    name.includes("cappuccino")
-  ) {
+  if (name.includes("latte") || name.includes("americano") || name.includes("cappuccino")) {
     if (menu.cheesecake) return "\n\n🤖 Tavsiya:\n🍰 Cheesecake tavsiya qilamiz.";
     if (menu.croissant) return "\n\n🤖 Tavsiya:\n🥐 Croissant ham qo‘shamizmi?";
   }
@@ -418,6 +416,16 @@ function registerBot(bot) {
       }
 
       session.items.push(item);
+
+      const image = await getImage(key);
+
+      if (image) {
+        await bot.sendPhoto(chatId, image, {
+          caption: `🍽 ${item.name}
+
+💰 ${money(item.price)}`,
+        });
+      }
 
       const upsell = upsellText(item, restaurant);
 
