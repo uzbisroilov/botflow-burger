@@ -10,8 +10,13 @@ let restaurants = {};
 const sessions = {};
 
 async function refreshMenus() {
-  restaurants = await getMenus();
-  console.log("🍽 Menu yangilandi");
+  try {
+    restaurants = await getMenus();
+    console.log("🍽 Menu yangilandi");
+  } catch (error) {
+    console.log("Menu refresh error:", error.message);
+    restaurants = {};
+  }
 }
 
 function money(n) {
@@ -50,11 +55,11 @@ function getRestaurant(session) {
 }
 
 function total(session) {
-  return session.items.reduce((sum, item) => sum + item.price, 0);
+  return session.items.reduce((sum, item) => sum + (item.price || 0), 0);
 }
 
 function summary(session) {
-  if (session.items.length === 0) return "🛒 Savat bo‘sh.";
+  if (!session.items || session.items.length === 0) return "🛒 Savat bo‘sh.";
 
   let text = "🧾 Buyurtma:\n\n";
 
@@ -68,7 +73,7 @@ function summary(session) {
 
 function upsellText(item, restaurant) {
   const name = (item.name || "").toLowerCase();
-  const menu = restaurant ? restaurant.menu : {};
+  const menu = restaurant && restaurant.menu ? restaurant.menu : {};
 
   if (name.includes("burger")) {
     if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
@@ -110,35 +115,55 @@ function mainKeyboard() {
 }
 
 function restaurantKeyboard() {
-  const rows = Object.values(restaurants).map((r) => [
-    {
-      text: r.name,
-      callback_data: `restaurant_${r.id}`,
-    },
-  ]);
+  const rows = Object.values(restaurants || {})
+    .filter((r) => r && r.id && r.name)
+    .map((r) => [
+      {
+        text: r.name,
+        callback_data: `restaurant_${r.id}`,
+      },
+    ]);
 
   return {
     reply_markup: {
-      inline_keyboard: rows,
+      inline_keyboard: rows.length
+        ? rows
+        : [[{ text: "❌ Restoran topilmadi", callback_data: "no_restaurants" }]],
     },
   };
 }
 
 function menuText(restaurant) {
+  if (!restaurant || !restaurant.menu) {
+    return "❌ Menu topilmadi. Admin paneldan menu qo‘shing.";
+  }
+
   let text = `🍽 ${restaurant.name} MENU:\n\n`;
 
   Object.values(restaurant.menu).forEach((item) => {
-    text += `${item.name} — ${money(item.price)}\n`;
+    if (item && item.name) {
+      text += `${item.name} — ${money(item.price)}\n`;
+    }
   });
 
-  return text;
+  return text || "❌ Menu bo‘sh.";
 }
 
 function menuKeyboard(restaurant) {
+  if (!restaurant || !restaurant.menu) {
+    return {
+      reply_markup: {
+        inline_keyboard: [],
+      },
+    };
+  }
+
   const buttons = [];
 
   Object.entries(restaurant.menu).forEach(([key, item]) => {
-    buttons.push([{ text: item.name, callback_data: `food_${key}` }]);
+    if (item && item.name) {
+      buttons.push([{ text: item.name, callback_data: `food_${key}` }]);
+    }
   });
 
   buttons.push([{ text: "🧾 Savat", callback_data: "cart" }]);
@@ -209,8 +234,12 @@ async function openRestaurant(bot, chatId, restaurantId, table = null) {
 
   const restaurant = restaurants[restaurantId];
 
-  if (!restaurant) {
-    return bot.sendMessage(chatId, "Restoran topilmadi.", restaurantKeyboard());
+  if (!restaurant || !restaurant.menu) {
+    return bot.sendMessage(
+      chatId,
+      "❌ Restoran yoki menu topilmadi. Boshqa restoranni tanlang.",
+      restaurantKeyboard()
+    );
   }
 
   const session = getSession(chatId);
@@ -219,7 +248,7 @@ async function openRestaurant(bot, chatId, restaurantId, table = null) {
   session.items = [];
   session.step = "idle";
 
-  bot.sendMessage(
+  await bot.sendMessage(
     chatId,
     `🚀 BotFlow AI
 
@@ -275,7 +304,7 @@ function registerBot(bot) {
       }
     }
 
-    bot.sendMessage(
+    await bot.sendMessage(
       chatId,
       `🚀 BotFlow AI
 
@@ -312,7 +341,7 @@ function registerBot(bot) {
     }
 
     if (text.includes("menu")) {
-      if (!restaurant) {
+      if (!restaurant || !restaurant.menu) {
         return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       }
 
@@ -320,7 +349,7 @@ function registerBot(bot) {
     }
 
     if (text.includes("savat")) {
-      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
@@ -379,6 +408,10 @@ function registerBot(bot) {
 
     await bot.answerCallbackQuery(query.id);
 
+    if (data === "no_restaurants") {
+      return bot.sendMessage(chatId, "❌ Hozircha restoranlar mavjud emas.");
+    }
+
     if (data.startsWith("status_")) {
       const parts = data.split("_");
       const action = parts[1];
@@ -405,7 +438,7 @@ function registerBot(bot) {
     if (data.startsWith("food_")) {
       const restaurant = getRestaurant(session);
 
-      if (!restaurant) {
+      if (!restaurant || !restaurant.menu) {
         return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       }
 
@@ -446,7 +479,7 @@ ${summary(session)}${upsell}`,
     if (data === "more") {
       const restaurant = getRestaurant(session);
 
-      if (!restaurant) {
+      if (!restaurant || !restaurant.menu) {
         return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       }
 
@@ -454,12 +487,12 @@ ${summary(session)}${upsell}`,
     }
 
     if (data === "cart") {
-      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
     if (data === "finish") {
-      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       session.step = "phone";
       return bot.sendMessage(chatId, "📞 Telefon yuboring.");
     }
@@ -469,7 +502,7 @@ ${summary(session)}${upsell}`,
       const restaurant = getRestaurant(session);
 
       if (!restaurant) return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      if (session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!session.items || session.items.length === 0) return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
 
       const orderId = "ORDER-" + Date.now().toString().slice(-6);
 
