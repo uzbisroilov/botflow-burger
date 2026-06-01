@@ -1,5 +1,4 @@
 const { saveOrder, updateOrderStatus, STATUSES } = require("../services/orderService");
-const { aiWaiterReply } = require("../services/aiService");
 const { createPaymentLink } = require("../services/paymentService");
 const { getMenus } = require("../services/menuService");
 
@@ -8,11 +7,10 @@ const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 let restaurants = {};
 const sessions = {};
 
-async function refreshMenus() {
+async function loadMenus() {
   try {
     restaurants = await getMenus();
-  } catch (error) {
-    console.log("Menu refresh error:", error.message);
+  } catch (e) {
     restaurants = {};
   }
 }
@@ -32,7 +30,6 @@ function getSession(chatId) {
       address: "",
     };
   }
-
   return sessions[chatId];
 }
 
@@ -47,51 +44,8 @@ function resetSession(chatId) {
   };
 }
 
-function getRestaurant(session) {
-  if (!session.restaurantId) return null;
-  return restaurants[session.restaurantId] || null;
-}
-
-function total(session) {
-  return session.items.reduce((sum, item) => sum + (item.price || 0), 0);
-}
-
-function summary(session) {
-  if (!session.items || session.items.length === 0) return "🛒 Savat bo‘sh.";
-
-  let text = "🧾 Buyurtma:\n\n";
-
-  session.items.forEach((item, i) => {
-    text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
-  });
-
-  text += `\n💰 Jami: ${money(total(session))}`;
-  return text;
-}
-
-function upsellText(item, restaurant) {
-  const name = (item.name || "").toLowerCase();
-  const menu = restaurant && restaurant.menu ? restaurant.menu : {};
-
-  if (name.includes("burger")) {
-    if (menu.cola) return "\n\n🤖 Tavsiya:\n🥤 Cola ham qo‘shamizmi?";
-    if (menu.fries) return "\n\n🤖 Tavsiya:\n🍟 Fri ham yaxshi ketadi.";
-  }
-
-  if (name.includes("latte") || name.includes("americano") || name.includes("cappuccino")) {
-    if (menu.cheesecake) return "\n\n🤖 Tavsiya:\n🍰 Cheesecake tavsiya qilamiz.";
-  }
-
-  if (
-    name.includes("sushi") ||
-    name.includes("roll") ||
-    name.includes("california") ||
-    name.includes("philadelphia")
-  ) {
-    return "\n\n🤖 Tavsiya:\n🍣 Katta set ham yaxshi tanlov.";
-  }
-
-  return "";
+function isAdminGroup(chatId) {
+  return ADMIN_CHAT_ID && chatId.toString() === ADMIN_CHAT_ID.toString();
 }
 
 function mainKeyboard() {
@@ -107,55 +61,36 @@ function mainKeyboard() {
 }
 
 function restaurantKeyboard() {
-  const rows = Object.values(restaurants || {})
-    .filter((r) => r && r.id && r.name)
-    .map((r) => [
-      {
-        text: r.name,
-        callback_data: `restaurant_${r.id}`,
-      },
-    ]);
+  const buttons = Object.values(restaurants).map((r) => [
+    { text: r.name, callback_data: `restaurant_${r.id}` },
+  ]);
 
   return {
     reply_markup: {
-      inline_keyboard: rows.length
-        ? rows
-        : [[{ text: "❌ Restoran topilmadi", callback_data: "no_restaurants" }]],
+      inline_keyboard: buttons,
     },
   };
 }
 
-function menuText(restaurant) {
-  if (!restaurant || !restaurant.menu) {
-    return "❌ Menu topilmadi. Admin paneldan menu qo‘shing.";
-  }
+function getRestaurant(session) {
+  return restaurants[session.restaurantId] || null;
+}
 
+function menuText(restaurant) {
   let text = `🍽 ${restaurant.name} MENU:\n\n`;
 
-  Object.values(restaurant.menu).forEach((item) => {
-    if (item && item.name) {
-      text += `${item.name} — ${money(item.price)}\n`;
-    }
+  Object.values(restaurant.menu || {}).forEach((item) => {
+    text += `${item.name} — ${money(item.price)}\n`;
   });
 
   return text;
 }
 
 function menuKeyboard(restaurant) {
-  if (!restaurant || !restaurant.menu) {
-    return {
-      reply_markup: {
-        inline_keyboard: [[{ text: "🧾 Savat", callback_data: "cart" }]],
-      },
-    };
-  }
-
   const buttons = [];
 
-  Object.entries(restaurant.menu).forEach(([key, item]) => {
-    if (item && item.name) {
-      buttons.push([{ text: item.name, callback_data: `food_${key}` }]);
-    }
+  Object.entries(restaurant.menu || {}).forEach(([key, item]) => {
+    buttons.push([{ text: item.name, callback_data: `food_${key}` }]);
   });
 
   buttons.push([{ text: "🧾 Savat", callback_data: "cart" }]);
@@ -165,6 +100,23 @@ function menuKeyboard(restaurant) {
       inline_keyboard: buttons,
     },
   };
+}
+
+function total(session) {
+  return session.items.reduce((sum, item) => sum + (item.price || 0), 0);
+}
+
+function summary(session) {
+  if (!session.items.length) return "🛒 Savat bo‘sh.";
+
+  let text = "🧾 Buyurtma:\n\n";
+
+  session.items.forEach((item, i) => {
+    text += `${i + 1}. ${item.name} — ${money(item.price)}\n`;
+  });
+
+  text += `\n💰 Jami: ${money(total(session))}`;
+  return text;
 }
 
 function cartKeyboard() {
@@ -192,12 +144,18 @@ function paymentKeyboard() {
   };
 }
 
+function paymentName(type) {
+  if (type === "click") return "💳 Click";
+  if (type === "payme") return "💳 Payme";
+  return "💵 Naqd";
+}
+
 function statusKeyboard(orderId, chatId) {
   return {
     reply_markup: {
       inline_keyboard: [
         [{ text: "✅ Qabul", callback_data: `status_accepted_${orderId}_${chatId}` }],
-        [{ text: "👨‍🍳 Tayyorlanmoqda", callback_data: `status_cooking_${orderId}_${chatId}` }],
+        [{ text: "👨‍🍳 Tayyor", callback_data: `status_cooking_${orderId}_${chatId}` }],
         [{ text: "🚗 Yo‘lda", callback_data: `status_delivery_${orderId}_${chatId}` }],
         [{ text: "🎉 Yetkazildi", callback_data: `status_delivered_${orderId}_${chatId}` }],
         [{ text: "❌ Bekor", callback_data: `status_cancelled_${orderId}_${chatId}` }],
@@ -206,32 +164,23 @@ function statusKeyboard(orderId, chatId) {
   };
 }
 
-function paymentName(type) {
-  if (type === "click") return "💳 Click";
-  if (type === "payme") return "💳 Payme";
-  return "💵 Naqd";
-}
+function parseStartPayload(payload) {
+  const parts = payload.split("_");
+  if (parts[0] !== "restaurant") return null;
 
-function isAdminGroup(chatId) {
-  return ADMIN_CHAT_ID && chatId.toString() === ADMIN_CHAT_ID.toString();
-}
-
-async function askRestaurant(bot, chatId) {
-  await refreshMenus();
-  return bot.sendMessage(chatId, "🏪 Restoran tanlang:", restaurantKeyboard());
+  return {
+    restaurantId: parts[1],
+    table: parts[2] === "table" ? parts[3] : null,
+  };
 }
 
 async function openRestaurant(bot, chatId, restaurantId, table = null) {
-  await refreshMenus();
+  await loadMenus();
 
   const restaurant = restaurants[restaurantId];
 
-  if (!restaurant || !restaurant.menu) {
-    return bot.sendMessage(
-      chatId,
-      "❌ Restoran yoki menu topilmadi. Boshqa restoranni tanlang.",
-      restaurantKeyboard()
-    );
+  if (!restaurant) {
+    return bot.sendMessage(chatId, "❌ Restoran topilmadi.", restaurantKeyboard());
   }
 
   const session = getSession(chatId);
@@ -245,7 +194,6 @@ async function openRestaurant(bot, chatId, restaurantId, table = null) {
     `🚀 BotFlow AI
 
 ${restaurant.name} ga xush kelibsiz!
-
 ${table ? `🪑 Stol: ${table}` : ""}`,
     mainKeyboard()
   );
@@ -253,24 +201,8 @@ ${table ? `🪑 Stol: ${table}` : ""}`,
   return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
 }
 
-function parseStartPayload(payload) {
-  const parts = payload.split("_");
-
-  if (parts[0] !== "restaurant") return null;
-
-  const restaurantId = parts[1];
-  let table = null;
-
-  if (parts[2] === "table" && parts[3]) {
-    table = parts[3];
-  }
-
-  return { restaurantId, table };
-}
-
 function registerBot(bot) {
-  refreshMenus();
-  setInterval(refreshMenus, 30000);
+  loadMenus();
 
   bot.onText(/\/id/, (msg) => {
     bot.sendMessage(msg.chat.id, `🆔 Chat ID: ${msg.chat.id}`);
@@ -279,18 +211,15 @@ function registerBot(bot) {
   bot.onText(/\/start(.*)/, async (msg, match) => {
     const chatId = msg.chat.id;
 
-    if (isAdminGroup(chatId)) {
-      return bot.sendMessage(chatId, "✅ Admin group ulangan. Buyurtmalar shu yerga keladi.");
-    }
+    if (isAdminGroup(chatId)) return;
 
     resetSession(chatId);
-    await refreshMenus();
+    await loadMenus();
 
     const payload = (match && match[1] ? match[1] : "").trim();
 
     if (payload) {
       const parsed = parseStartPayload(payload);
-
       if (parsed) {
         return openRestaurant(bot, chatId, parsed.restaurantId, parsed.table);
       }
@@ -307,18 +236,17 @@ function registerBot(bot) {
       mainKeyboard()
     );
 
-    return askRestaurant(bot, chatId);
+    return bot.sendMessage(chatId, "🏪 Restoran tanlang:", restaurantKeyboard());
   });
 
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
-    const rawText = msg.text || "";
-    const text = rawText.toLowerCase().trim();
+    const text = (msg.text || "").toLowerCase();
 
     if (!text || text.startsWith("/")) return;
     if (isAdminGroup(chatId)) return;
 
-    await refreshMenus();
+    await loadMenus();
 
     const session = getSession(chatId);
     const restaurant = getRestaurant(session);
@@ -329,28 +257,22 @@ function registerBot(bot) {
     }
 
     if (text.includes("restoran")) {
-      return askRestaurant(bot, chatId);
+      return bot.sendMessage(chatId, "🏪 Restoran tanlang:", restaurantKeyboard());
     }
 
     if (text.includes("menu")) {
-      if (!restaurant || !restaurant.menu) {
+      if (!restaurant) {
         return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       }
-
       return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
     }
 
     if (text.includes("savat")) {
-      if (!session.items || session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-      }
-
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
     if (session.step === "phone") {
       session.phone = msg.text;
-      session.step = "address";
 
       if (session.table) {
         session.address = `Restoran ichida, stol ${session.table}`;
@@ -368,6 +290,7 @@ function registerBot(bot) {
         );
       }
 
+      session.step = "address";
       return bot.sendMessage(chatId, "📍 Manzil yuboring.");
     }
 
@@ -387,25 +310,14 @@ function registerBot(bot) {
       );
     }
 
-    try {
-      const aiText = await aiWaiterReply(rawText, restaurant, restaurants);
-      return bot.sendMessage(chatId, aiText);
-    } catch (error) {
-      console.log("AI error:", error.message);
-      return bot.sendMessage(chatId, "Buyurtma berish uchun 📋 Menu ni bosing yoki 🏪 Restoran tanlang.");
-    }
+    return bot.sendMessage(chatId, "Buyurtma berish uchun 📋 Menu ni bosing.");
   });
 
   bot.on("callback_query", async (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
-    const session = getSession(chatId);
 
     await bot.answerCallbackQuery(query.id);
-
-    if (data === "no_restaurants") {
-      return bot.sendMessage(chatId, "❌ Hozircha restoranlar mavjud emas.");
-    }
 
     if (data.startsWith("status_")) {
       const parts = data.split("_");
@@ -423,7 +335,9 @@ function registerBot(bot) {
 
     if (isAdminGroup(chatId)) return;
 
-    await refreshMenus();
+    await loadMenus();
+
+    const session = getSession(chatId);
 
     if (data.startsWith("restaurant_")) {
       const restaurantId = data.replace("restaurant_", "");
@@ -433,7 +347,7 @@ function registerBot(bot) {
     if (data.startsWith("food_")) {
       const restaurant = getRestaurant(session);
 
-      if (!restaurant || !restaurant.menu) {
+      if (!restaurant) {
         return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
       }
 
@@ -446,37 +360,26 @@ function registerBot(bot) {
 
       session.items.push(item);
 
-      const upsell = upsellText(item, restaurant);
-
       return bot.sendMessage(
         chatId,
         `✅ ${item.name} qo‘shildi
 
-${summary(session)}${upsell}`,
+${summary(session)}`,
         cartKeyboard()
       );
     }
 
     if (data === "more") {
       const restaurant = getRestaurant(session);
-
-      if (!restaurant || !restaurant.menu) {
-        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      }
-
       return bot.sendMessage(chatId, menuText(restaurant), menuKeyboard(restaurant));
     }
 
     if (data === "cart") {
-      if (!session.items || session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
-      }
-
       return bot.sendMessage(chatId, summary(session), cartKeyboard());
     }
 
     if (data === "finish") {
-      if (!session.items || session.items.length === 0) {
+      if (!session.items.length) {
         return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
       }
 
@@ -488,12 +391,8 @@ ${summary(session)}${upsell}`,
       const paymentType = data.replace("payment_", "");
       const restaurant = getRestaurant(session);
 
-      if (!restaurant) {
-        return bot.sendMessage(chatId, "Avval restoran tanlang.", restaurantKeyboard());
-      }
-
-      if (!session.items || session.items.length === 0) {
-        return bot.sendMessage(chatId, "🛒 Savat bo‘sh.");
+      if (!restaurant || !session.items.length) {
+        return bot.sendMessage(chatId, "Buyurtma topilmadi.");
       }
 
       const orderId = "ORDER-" + Date.now().toString().slice(-6);
