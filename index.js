@@ -6,6 +6,7 @@ const TelegramBot = require("node-telegram-bot-api");
 
 const { registerBot } = require("./bot/bot");
 const { adminRoutes } = require("./web/adminRoutes");
+const { menuRoutes } = require("./web/menuRoutes");
 const { ensureDataFile } = require("./services/orderService");
 
 const app = express();
@@ -17,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;
 
 if (!process.env.BOT_TOKEN) {
-  console.error("BOT_TOKEN topilmadi");
+  console.error("❌ BOT_TOKEN topilmadi");
   process.exit(1);
 }
 
@@ -35,10 +36,6 @@ bot.on("polling_error", (error) => {
   console.log("Polling error:", error.message);
 });
 
-bot.on("webhook_error", (error) => {
-  console.log("Webhook error:", error.message);
-});
-
 process.on("unhandledRejection", (error) => {
   console.log("Unhandled rejection:", error.message);
 });
@@ -51,17 +48,20 @@ ensureDataFile();
 
 registerBot(bot);
 adminRoutes(app, bot);
+menuRoutes(app);
 
 app.get("/", (req, res) => {
   res.send(`
     <h1>🚀 BotFlow AI SaaS ishlayapti</h1>
+
     <p><a href="/admin">Admin panel</a></p>
     <p><a href="/admin/burger">Burger owner panel</a></p>
     <p><a href="/admin/sushi">Sushi owner panel</a></p>
     <p><a href="/admin/coffee">Coffee owner panel</a></p>
+    <p><a href="/menu">Telegram Web App Menu</a></p>
   `);
 });
 
 app.listen(PORT, () => {
-  console.log(`Server ${PORT} portda ishlayapti`);
+  console.log(`🌐 Server ${PORT} portda ishlayapti`);
 });
