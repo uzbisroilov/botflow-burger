@@ -25,6 +25,7 @@ function getSession(chatId) {
       step: "idle",
       phone: "",
       address: "",
+      paymentType: "cash",
     };
   }
 
@@ -39,6 +40,7 @@ function resetSession(chatId) {
     step: "idle",
     phone: "",
     address: "",
+    paymentType: "cash",
   };
 }
 
@@ -121,6 +123,12 @@ function summary(session) {
   return text;
 }
 
+function paymentName(type) {
+  if (type === "click") return "💳 Click";
+  if (type === "payme") return "💳 Payme";
+  return "💵 Naqd";
+}
+
 function cartKeyboard() {
   return {
     reply_markup: {
@@ -144,12 +152,6 @@ function paymentKeyboard() {
       ],
     },
   };
-}
-
-function paymentName(type) {
-  if (type === "click") return "💳 Click";
-  if (type === "payme") return "💳 Payme";
-  return "💵 Naqd";
 }
 
 function statusKeyboard(orderId, chatId) {
@@ -184,6 +186,8 @@ async function openRestaurant(bot, chatId, restaurantId) {
 }
 
 async function createOrder(bot, chatId, queryFrom = null) {
+  await loadMenus();
+
   const session = getSession(chatId);
   const restaurant = getRestaurant(session);
 
@@ -197,7 +201,7 @@ async function createOrder(bot, chatId, queryFrom = null) {
     orderId,
     restaurant: restaurant.name,
     restaurantId: restaurant.id,
-    customer: queryFrom?.first_name || "Noma’lum",
+    customer: queryFrom?.first_name || "Client",
     chatId,
     phone: session.phone,
     address: session.address,
@@ -287,10 +291,22 @@ function registerBot(bot) {
       try {
         const data = JSON.parse(msg.web_app_data.data);
 
-        if (data.type === "web_order") {
+        if (data.type === "web_order" || data.type === "web_order_full") {
           const session = getSession(chatId);
+
           session.restaurantId = data.restaurantId;
           session.items = data.items || [];
+
+          if (data.phone) session.phone = data.phone;
+          if (data.address) session.address = data.address;
+          if (data.paymentType) session.paymentType = data.paymentType;
+
+          if (data.phone && data.address && data.paymentType) {
+            return createOrder(bot, chatId, {
+              first_name: msg.from.first_name || "Client",
+            });
+          }
+
           session.step = "phone";
 
           return bot.sendMessage(
@@ -301,7 +317,8 @@ function registerBot(bot) {
           );
         }
       } catch (error) {
-        return bot.sendMessage(chatId, "Web menu ma’lumoti xato keldi.");
+        console.log("WebApp data error:", error.message);
+        return bot.sendMessage(chatId, "❌ Web menu ma’lumoti xato keldi.");
       }
     }
 

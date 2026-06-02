@@ -37,6 +37,7 @@ function normalizeMenus(rawMenus) {
 
   Object.entries(source).forEach(([key, value]) => {
     const restaurantId = value.id || key;
+
     result[restaurantId] = {
       id: restaurantId,
       name: value.name || restaurantId,
@@ -73,7 +74,7 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
   background:#f5f6fa;
   color:#0b1230;
-  padding-bottom:120px;
+  padding-bottom:130px;
 }
 .top{
   background:#111827;
@@ -248,6 +249,68 @@ body{
   font-size:17px;
   font-weight:900;
 }
+.checkoutOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(15,23,42,.55);
+  display:none;
+  align-items:flex-end;
+  z-index:50;
+}
+.checkout{
+  width:100%;
+  background:white;
+  border-top-left-radius:26px;
+  border-top-right-radius:26px;
+  padding:18px;
+  max-height:88vh;
+  overflow:auto;
+}
+.checkout h2{
+  margin:0 0 12px;
+}
+.field{
+  margin-bottom:12px;
+}
+.field label{
+  display:block;
+  font-weight:800;
+  margin-bottom:6px;
+}
+.field input,.field textarea,.field select{
+  width:100%;
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  border-radius:14px;
+  padding:13px;
+  font-size:15px;
+  outline:none;
+}
+.field textarea{
+  min-height:76px;
+  resize:none;
+}
+.checkoutActions{
+  display:flex;
+  gap:10px;
+}
+.cancelBtn{
+  flex:1;
+  border:0;
+  border-radius:16px;
+  background:#e5e7eb;
+  padding:14px;
+  font-weight:900;
+}
+.submitBtn{
+  flex:2;
+  border:0;
+  border-radius:16px;
+  background:#16a34a;
+  color:white;
+  padding:14px;
+  font-weight:900;
+}
 .footer{
   text-align:center;
   color:#64748b;
@@ -283,8 +346,38 @@ body{
     <span id="cartCount">🛒 Savat bo‘sh</span>
     <span id="cartTotal">0 UZS</span>
   </div>
-  <button class="orderBtn" onclick="sendOrder()">✅ Buyurtma berish</button>
+  <button class="orderBtn" onclick="openCheckout()">✅ Buyurtma berish</button>
   <div class="footer">@botflow_support_bot</div>
+</div>
+
+<div class="checkoutOverlay" id="checkoutOverlay">
+  <div class="checkout">
+    <h2>🧾 Buyurtmani yakunlash</h2>
+
+    <div class="field">
+      <label>📱 Telefon raqam</label>
+      <input id="phone" placeholder="+998 90 123 45 67" />
+    </div>
+
+    <div class="field">
+      <label>📍 Manzil</label>
+      <textarea id="address" placeholder="Ko‘cha, uy, mo‘ljal..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>💳 To‘lov turi</label>
+      <select id="payment">
+        <option value="cash">💵 Naqd</option>
+        <option value="click">💳 Click</option>
+        <option value="payme">💳 Payme</option>
+      </select>
+    </div>
+
+    <div class="checkoutActions">
+      <button class="cancelBtn" onclick="closeCheckout()">Bekor</button>
+      <button class="submitBtn" onclick="sendOrder()">Yuborish</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -412,9 +505,36 @@ function renderCart(){
   document.getElementById("cartTotal").innerText = money(total);
 }
 
+function openCheckout(){
+  if(!cart.length){
+    alert("Savat bo‘sh");
+    return;
+  }
+
+  document.getElementById("checkoutOverlay").style.display = "flex";
+}
+
+function closeCheckout(){
+  document.getElementById("checkoutOverlay").style.display = "none";
+}
+
 function sendOrder(){
   if(!cart.length){
     alert("Savat bo‘sh");
+    return;
+  }
+
+  const phone = document.getElementById("phone").value.trim();
+  const address = document.getElementById("address").value.trim();
+  const paymentType = document.getElementById("payment").value;
+
+  if(!phone){
+    alert("Telefon raqam kiriting");
+    return;
+  }
+
+  if(!address){
+    alert("Manzil kiriting");
     return;
   }
 
@@ -423,10 +543,13 @@ function sendOrder(){
   const total = items.reduce((sum,item)=>sum + Number(item.price || 0),0);
 
   const payload = {
-    type: "web_order",
+    type: "web_order_full",
     restaurantId,
     items,
-    total
+    total,
+    phone,
+    address,
+    paymentType
   };
 
   if(window.Telegram && Telegram.WebApp){
