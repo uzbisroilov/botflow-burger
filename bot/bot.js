@@ -25,6 +25,7 @@ function getSession(chatId) {
       step: "idle",
       phone: "",
       address: "",
+      location: null,
       paymentType: "cash",
     };
   }
@@ -40,6 +41,7 @@ function resetSession(chatId) {
     step: "idle",
     phone: "",
     address: "",
+    location: null,
     paymentType: "cash",
   };
 }
@@ -226,7 +228,8 @@ async function createOrder(bot, chatId, queryFrom = null) {
 🏪 ${restaurant.name}
 💰 ${money(order.total)}
 💳 To‘lov: ${order.paymentName}
-${paymentLink ? `\n🔗 To‘lov linki:\n${paymentLink}` : ""}`
+
+${paymentLink ? `🔗 To‘lov linki:\n${paymentLink}` : ""}`
   );
 
   if (ADMIN_CHAT_ID) {
@@ -243,7 +246,8 @@ ${summary(session)}
 💳 To‘lov: ${order.paymentName}
 📞 ${session.phone}
 📍 ${session.address}
-${session.location ? `\n🗺 Location: https://maps.google.com/?q=${session.location.latitude},${session.location.longitude}` : ""}
+
+${session.location ? `🗺 https://maps.google.com/?q=${session.location.latitude},${session.location.longitude}` : ""}`,
       statusKeyboard(orderId, chatId)
     );
   }
@@ -301,8 +305,8 @@ function registerBot(bot) {
 
           if (data.phone) session.phone = data.phone;
           if (data.address) session.address = data.address;
-          if (data.location) session.location = data.location;
           if (data.paymentType) session.paymentType = data.paymentType;
+          if (data.location) session.location = data.location;
 
           if (data.phone && data.address && data.paymentType) {
             return createOrder(bot, chatId, {
