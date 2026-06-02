@@ -69,254 +69,48 @@ function menuRoutes(app) {
 
 <style>
 *{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
-  background:#f5f6fa;
-  color:#0b1230;
-  padding-bottom:130px;
-}
-.top{
-  background:#111827;
-  color:white;
-  padding:18px 16px 20px;
-}
-.brand{
-  font-size:24px;
-  font-weight:800;
-}
-.sub{
-  color:#cbd5e1;
-  margin-top:5px;
-  font-size:14px;
-}
-.searchBox{
-  padding:12px 14px;
-  background:white;
-}
-.searchBox input{
-  width:100%;
-  border:0;
-  outline:none;
-  background:#f1f5f9;
-  border-radius:16px;
-  padding:13px 14px;
-  font-size:15px;
-}
-.tabs{
-  display:flex;
-  gap:10px;
-  overflow-x:auto;
-  padding:12px 14px;
-  background:white;
-}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f5f6fa;color:#0b1230;padding-bottom:130px}
+.top{background:#111827;color:white;padding:18px 16px 20px}
+.brand{font-size:24px;font-weight:800}
+.sub{color:#cbd5e1;margin-top:5px;font-size:14px}
+.searchBox{padding:12px 14px;background:white}
+.searchBox input{width:100%;border:0;outline:none;background:#f1f5f9;border-radius:16px;padding:13px 14px;font-size:15px}
+.tabs{display:flex;gap:10px;overflow-x:auto;padding:12px 14px;background:white}
 .tabs::-webkit-scrollbar{display:none}
-.tab{
-  border:0;
-  border-radius:999px;
-  padding:10px 16px;
-  font-size:14px;
-  font-weight:700;
-  background:#eef2f7;
-  color:#111827;
-  white-space:nowrap;
-}
-.tab.active{
-  background:#111827;
-  color:white;
-}
-.banner{
-  margin:12px 14px 4px;
-  border-radius:22px;
-  padding:16px;
-  background:linear-gradient(135deg,#f97316,#ef4444);
-  color:white;
-  box-shadow:0 8px 18px rgba(239,68,68,.25);
-}
-.bannerTitle{
-  font-size:20px;
-  font-weight:800;
-}
-.bannerText{
-  font-size:14px;
-  margin-top:5px;
-  opacity:.95;
-}
-.sectionTitle{
-  padding:12px 16px 4px;
-  font-size:22px;
-  font-weight:900;
-}
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:14px;
-  padding:12px 14px;
-}
-.card{
-  background:white;
-  border-radius:20px;
-  overflow:hidden;
-  box-shadow:0 8px 20px rgba(15,23,42,.08);
-}
-.card img{
-  width:100%;
-  height:128px;
-  object-fit:cover;
-  display:block;
-}
-.cardBody{
-  padding:11px;
-}
-.itemName{
-  font-size:15px;
-  font-weight:750;
-  min-height:40px;
-}
-.price{
-  margin-top:8px;
-  font-size:16px;
-  font-weight:900;
-  color:#111827;
-}
-.controls{
-  margin-top:10px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-}
-.addBtn{
-  flex:1;
-  border:0;
-  border-radius:12px;
-  background:#16a34a;
-  color:white;
-  padding:10px 8px;
-  font-weight:800;
-}
-.qty{
-  display:flex;
-  align-items:center;
-  gap:7px;
-}
-.qty button{
-  width:30px;
-  height:30px;
-  border:0;
-  border-radius:50%;
-  background:#111827;
-  color:white;
-  font-size:18px;
-  font-weight:900;
-}
-.qty span{
-  min-width:18px;
-  text-align:center;
-  font-weight:900;
-}
-.empty{
-  grid-column:1/3;
-  text-align:center;
-  color:#64748b;
-  padding:40px 10px;
-}
-.cart{
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:0;
-  background:white;
-  padding:14px;
-  border-top-left-radius:24px;
-  border-top-right-radius:24px;
-  box-shadow:0 -8px 24px rgba(15,23,42,.14);
-}
-.cartRow{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:10px;
-  font-weight:800;
-}
-.orderBtn{
-  width:100%;
-  border:0;
-  border-radius:16px;
-  background:#2563eb;
-  color:white;
-  padding:15px;
-  font-size:17px;
-  font-weight:900;
-}
-.checkoutOverlay{
-  position:fixed;
-  inset:0;
-  background:rgba(15,23,42,.55);
-  display:none;
-  align-items:flex-end;
-  z-index:50;
-}
-.checkout{
-  width:100%;
-  background:white;
-  border-top-left-radius:26px;
-  border-top-right-radius:26px;
-  padding:18px;
-  max-height:88vh;
-  overflow:auto;
-}
-.checkout h2{
-  margin:0 0 12px;
-}
-.field{
-  margin-bottom:12px;
-}
-.field label{
-  display:block;
-  font-weight:800;
-  margin-bottom:6px;
-}
-.field input,.field textarea,.field select{
-  width:100%;
-  border:1px solid #e5e7eb;
-  background:#f8fafc;
-  border-radius:14px;
-  padding:13px;
-  font-size:15px;
-  outline:none;
-}
-.field textarea{
-  min-height:76px;
-  resize:none;
-}
-.checkoutActions{
-  display:flex;
-  gap:10px;
-}
-.cancelBtn{
-  flex:1;
-  border:0;
-  border-radius:16px;
-  background:#e5e7eb;
-  padding:14px;
-  font-weight:900;
-}
-.submitBtn{
-  flex:2;
-  border:0;
-  border-radius:16px;
-  background:#16a34a;
-  color:white;
-  padding:14px;
-  font-weight:900;
-}
-.footer{
-  text-align:center;
-  color:#64748b;
-  font-size:13px;
-  padding-top:6px;
-}
+.tab{border:0;border-radius:999px;padding:10px 16px;font-size:14px;font-weight:700;background:#eef2f7;color:#111827;white-space:nowrap}
+.tab.active{background:#111827;color:white}
+.banner{margin:12px 14px 4px;border-radius:22px;padding:16px;background:linear-gradient(135deg,#f97316,#ef4444);color:white;box-shadow:0 8px 18px rgba(239,68,68,.25)}
+.bannerTitle{font-size:20px;font-weight:800}
+.bannerText{font-size:14px;margin-top:5px;opacity:.95}
+.sectionTitle{padding:12px 16px 4px;font-size:22px;font-weight:900}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:12px 14px}
+.card{background:white;border-radius:20px;overflow:hidden;box-shadow:0 8px 20px rgba(15,23,42,.08)}
+.card img{width:100%;height:128px;object-fit:cover;display:block}
+.cardBody{padding:11px}
+.itemName{font-size:15px;font-weight:750;min-height:40px}
+.price{margin-top:8px;font-size:16px;font-weight:900;color:#111827}
+.controls{margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.addBtn{flex:1;border:0;border-radius:12px;background:#16a34a;color:white;padding:10px 8px;font-weight:800}
+.qty{display:flex;align-items:center;gap:7px}
+.qty button{width:30px;height:30px;border:0;border-radius:50%;background:#111827;color:white;font-size:18px;font-weight:900}
+.qty span{min-width:18px;text-align:center;font-weight:900}
+.empty{grid-column:1/3;text-align:center;color:#64748b;padding:40px 10px}
+.cart{position:fixed;left:0;right:0;bottom:0;background:white;padding:14px;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -8px 24px rgba(15,23,42,.14)}
+.cartRow{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-weight:800}
+.orderBtn{width:100%;border:0;border-radius:16px;background:#2563eb;color:white;padding:15px;font-size:17px;font-weight:900}
+.checkoutOverlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-end;z-index:50}
+.checkout{width:100%;background:white;border-top-left-radius:26px;border-top-right-radius:26px;padding:18px;max-height:90vh;overflow:auto}
+.checkout h2{margin:0 0 12px}
+.field{margin-bottom:12px}
+.field label{display:block;font-weight:800;margin-bottom:6px}
+.field input,.field textarea,.field select{width:100%;border:1px solid #e5e7eb;background:#f8fafc;border-radius:14px;padding:13px;font-size:15px;outline:none}
+.field textarea{min-height:76px;resize:none}
+.locationBtn{width:100%;border:0;border-radius:14px;background:#111827;color:white;padding:13px;font-weight:900;margin-bottom:12px}
+.locationInfo{font-size:13px;color:#16a34a;margin-bottom:10px;font-weight:700}
+.checkoutActions{display:flex;gap:10px}
+.cancelBtn{flex:1;border:0;border-radius:16px;background:#e5e7eb;padding:14px;font-weight:900}
+.submitBtn{flex:2;border:0;border-radius:16px;background:#16a34a;color:white;padding:14px;font-weight:900}
+.footer{text-align:center;color:#64748b;font-size:13px;padding-top:6px}
 </style>
 </head>
 
@@ -359,6 +153,9 @@ body{
       <input id="phone" placeholder="+998 90 123 45 67" />
     </div>
 
+    <button class="locationBtn" onclick="getLocation()">📍 Mening lokatsiyam</button>
+    <div class="locationInfo" id="locationInfo"></div>
+
     <div class="field">
       <label>📍 Manzil</label>
       <textarea id="address" placeholder="Ko‘cha, uy, mo‘ljal..."></textarea>
@@ -385,6 +182,7 @@ const menus = ${JSON.stringify(menus)};
 const restaurantIds = Object.keys(menus);
 let currentRestaurant = restaurantIds[0] || null;
 let cart = [];
+let userLocation = null;
 
 const images = {
   burger: "https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg",
@@ -518,6 +316,35 @@ function closeCheckout(){
   document.getElementById("checkoutOverlay").style.display = "none";
 }
 
+function getLocation(){
+  if(!navigator.geolocation){
+    alert("Telefoningiz lokatsiyani qo‘llab-quvvatlamaydi");
+    return;
+  }
+
+  document.getElementById("locationInfo").innerText = "📍 Lokatsiya olinmoqda...";
+
+  navigator.geolocation.getCurrentPosition(
+    function(position){
+      userLocation = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      };
+
+      document.getElementById("locationInfo").innerText =
+        "✅ Lokatsiya olindi";
+
+      document.getElementById("address").value =
+        "Lokatsiya orqali yuborildi";
+    },
+    function(){
+      document.getElementById("locationInfo").innerText =
+        "❌ Lokatsiya olinmadi";
+      alert("Lokatsiyaga ruxsat bering");
+    }
+  );
+}
+
 function sendOrder(){
   if(!cart.length){
     alert("Savat bo‘sh");
@@ -533,8 +360,8 @@ function sendOrder(){
     return;
   }
 
-  if(!address){
-    alert("Manzil kiriting");
+  if(!address && !userLocation){
+    alert("Manzil kiriting yoki lokatsiya yuboring");
     return;
   }
 
@@ -548,8 +375,9 @@ function sendOrder(){
     items,
     total,
     phone,
-    address,
-    paymentType
+    address: address || "Lokatsiya yuborildi",
+    paymentType,
+    location: userLocation
   };
 
   if(window.Telegram && Telegram.WebApp){

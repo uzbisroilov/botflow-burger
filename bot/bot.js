@@ -205,6 +205,7 @@ async function createOrder(bot, chatId, queryFrom = null) {
     chatId,
     phone: session.phone,
     address: session.address,
+    location: session.location || null,
     paymentType: session.paymentType || "cash",
     paymentName: paymentName(session.paymentType || "cash"),
     items: session.items,
@@ -241,7 +242,8 @@ ${summary(session)}
 
 💳 To‘lov: ${order.paymentName}
 📞 ${session.phone}
-📍 ${session.address}`,
+📍 ${session.address}
+${session.location ? `\n🗺 Location: https://maps.google.com/?q=${session.location.latitude},${session.location.longitude}` : ""}
       statusKeyboard(orderId, chatId)
     );
   }
@@ -299,6 +301,7 @@ function registerBot(bot) {
 
           if (data.phone) session.phone = data.phone;
           if (data.address) session.address = data.address;
+          if (data.location) session.location = data.location;
           if (data.paymentType) session.paymentType = data.paymentType;
 
           if (data.phone && data.address && data.paymentType) {
