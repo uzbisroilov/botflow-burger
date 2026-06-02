@@ -317,12 +317,17 @@ function closeCheckout(){
 }
 
 function getLocation(){
+  if(window.Telegram && Telegram.WebApp){
+    Telegram.WebApp.expand();
+  }
+
   if(!navigator.geolocation){
-    alert("Telefoningiz lokatsiyani qo‘llab-quvvatlamaydi");
+    alert("Telefon lokatsiyani qo‘llamaydi");
     return;
   }
 
-  document.getElementById("locationInfo").innerText = "📍 Lokatsiya olinmoqda...";
+  document.getElementById("locationInfo").innerText =
+    "📍 Lokatsiya olinmoqda...";
 
   navigator.geolocation.getCurrentPosition(
     function(position){
@@ -332,15 +337,33 @@ function getLocation(){
       };
 
       document.getElementById("locationInfo").innerText =
-        "✅ Lokatsiya olindi";
+        "✅ Lokatsiya muvaffaqiyatli olindi";
 
       document.getElementById("address").value =
-        "Lokatsiya orqali yuborildi";
+        "📍 GPS lokatsiya yuborildi";
     },
-    function(){
-      document.getElementById("locationInfo").innerText =
-        "❌ Lokatsiya olinmadi";
-      alert("Lokatsiyaga ruxsat bering");
+    function(error){
+      let message = "Lokatsiya olinmadi";
+
+      if(error.code === 1){
+        message = "❌ Lokatsiyaga ruxsat berilmadi";
+      }
+
+      if(error.code === 2){
+        message = "❌ GPS aniqlanmadi";
+      }
+
+      if(error.code === 3){
+        message = "❌ Timeout bo‘ldi";
+      }
+
+      document.getElementById("locationInfo").innerText = message;
+      alert(message);
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
     }
   );
 }
