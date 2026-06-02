@@ -1,140 +1,224 @@
 const { getMenus } = require("../services/menuService");
 
+function normalizeMenus(rawMenus) {
+  const fallback = {
+    burger: {
+      id: "burger",
+      name: "🍔 BotFlow Burger",
+      menu: {
+        burger: { name: "🍔 Classic Burger", price: 32000 },
+        cheeseburger: { name: "🧀 Cheese Burger", price: 38000 },
+        cola: { name: "🥤 Cola", price: 10000 },
+        fries: { name: "🍟 Fri", price: 15000 },
+      },
+    },
+    sushi: {
+      id: "sushi",
+      name: "🍣 Sushi Master",
+      menu: {
+        california: { name: "🍣 California", price: 48000 },
+        philadelphia: { name: "🍱 Philadelphia", price: 55000 },
+        cola: { name: "🥤 Cola", price: 10000 },
+      },
+    },
+    coffee: {
+      id: "coffee",
+      name: "☕ Coffee Time",
+      menu: {
+        americano: { name: "☕ Americano", price: 18000 },
+        latte: { name: "🥛 Latte", price: 26000 },
+        cheesecake: { name: "🍰 Cheesecake", price: 32000 },
+      },
+    },
+  };
+
+  const source = rawMenus && Object.keys(rawMenus).length ? rawMenus : fallback;
+  const result = {};
+
+  Object.entries(source).forEach(([key, value]) => {
+    const restaurantId = value.id || key;
+    result[restaurantId] = {
+      id: restaurantId,
+      name: value.name || restaurantId,
+      menu: value.menu || {},
+    };
+  });
+
+  return result;
+}
+
 function menuRoutes(app) {
   app.get("/menu", async (req, res) => {
-    const menus = await getMenus();
+    let menus = {};
+
+    try {
+      menus = normalizeMenus(await getMenus());
+    } catch (error) {
+      menus = normalizeMenus({});
+    }
 
     res.send(`
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<title>BotFlow Menu</title>
+<title>BotFlow AI Menu</title>
 
 <style>
 *{box-sizing:border-box}
 body{
   margin:0;
-  font-family:Arial, sans-serif;
-  background:#f3f4f6;
-  color:#111827;
-  padding-bottom:110px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  background:#f5f6fa;
+  color:#0b1230;
+  padding-bottom:120px;
 }
-.header{
-  background:linear-gradient(135deg,#111827,#1f2937);
+.top{
+  background:#111827;
   color:white;
-  padding:20px 16px 28px;
-  border-bottom-left-radius:24px;
-  border-bottom-right-radius:24px;
+  padding:18px 16px 20px;
 }
-.header h1{
-  margin:0;
+.brand{
   font-size:24px;
+  font-weight:800;
 }
-.header p{
-  margin:8px 0 0;
-  color:#d1d5db;
+.sub{
+  color:#cbd5e1;
+  margin-top:5px;
+  font-size:14px;
 }
-.search{
-  margin:14px 16px 8px;
+.searchBox{
+  padding:12px 14px;
+  background:white;
 }
-.search input{
+.searchBox input{
   width:100%;
   border:0;
+  outline:none;
+  background:#f1f5f9;
   border-radius:16px;
-  padding:14px;
+  padding:13px 14px;
   font-size:15px;
-  box-shadow:0 4px 14px #0001;
 }
 .tabs{
   display:flex;
   gap:10px;
-  padding:10px 16px;
   overflow-x:auto;
-}
-.tabs button{
-  white-space:nowrap;
-  border:0;
-  padding:11px 16px;
-  border-radius:999px;
+  padding:12px 14px;
   background:white;
-  box-shadow:0 3px 10px #0001;
-  font-weight:bold;
 }
-.tabs button.active{
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  border:0;
+  border-radius:999px;
+  padding:10px 16px;
+  font-size:14px;
+  font-weight:700;
+  background:#eef2f7;
+  color:#111827;
+  white-space:nowrap;
+}
+.tab.active{
   background:#111827;
   color:white;
 }
 .banner{
-  margin:10px 16px;
+  margin:12px 14px 4px;
+  border-radius:22px;
+  padding:16px;
   background:linear-gradient(135deg,#f97316,#ef4444);
   color:white;
-  border-radius:20px;
-  padding:16px;
-  box-shadow:0 6px 18px #0002;
+  box-shadow:0 8px 18px rgba(239,68,68,.25);
 }
-.banner b{
+.bannerTitle{
   font-size:20px;
+  font-weight:800;
+}
+.bannerText{
+  font-size:14px;
+  margin-top:5px;
+  opacity:.95;
+}
+.sectionTitle{
+  padding:12px 16px 4px;
+  font-size:22px;
+  font-weight:900;
 }
 .grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:14px;
-  padding:14px 16px;
+  padding:12px 14px;
 }
 .card{
   background:white;
   border-radius:20px;
   overflow:hidden;
-  box-shadow:0 6px 18px #0001;
+  box-shadow:0 8px 20px rgba(15,23,42,.08);
 }
 .card img{
   width:100%;
-  height:125px;
+  height:128px;
   object-fit:cover;
+  display:block;
 }
-.body{
-  padding:12px;
+.cardBody{
+  padding:11px;
 }
-.name{
+.itemName{
   font-size:15px;
-  font-weight:bold;
+  font-weight:750;
   min-height:40px;
 }
 .price{
   margin-top:8px;
-  font-weight:bold;
-  color:#16a34a;
+  font-size:16px;
+  font-weight:900;
+  color:#111827;
 }
 .controls{
+  margin-top:10px;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  margin-top:10px;
+  gap:8px;
 }
-.add{
+.addBtn{
+  flex:1;
   border:0;
+  border-radius:12px;
   background:#16a34a;
   color:white;
-  padding:9px 12px;
-  border-radius:12px;
-  font-weight:bold;
+  padding:10px 8px;
+  font-weight:800;
 }
 .qty{
   display:flex;
   align-items:center;
-  gap:8px;
+  gap:7px;
 }
 .qty button{
-  width:28px;
-  height:28px;
+  width:30px;
+  height:30px;
   border:0;
   border-radius:50%;
   background:#111827;
   color:white;
-  font-weight:bold;
+  font-size:18px;
+  font-weight:900;
+}
+.qty span{
+  min-width:18px;
+  text-align:center;
+  font-weight:900;
+}
+.empty{
+  grid-column:1/3;
+  text-align:center;
+  color:#64748b;
+  padding:40px 10px;
 }
 .cart{
   position:fixed;
@@ -142,66 +226,71 @@ body{
   right:0;
   bottom:0;
   background:white;
-  padding:14px 16px;
-  box-shadow:0 -6px 20px #0002;
-  border-top-left-radius:22px;
-  border-top-right-radius:22px;
+  padding:14px;
+  border-top-left-radius:24px;
+  border-top-right-radius:24px;
+  box-shadow:0 -8px 24px rgba(15,23,42,.14);
 }
-.cartTop{
+.cartRow{
   display:flex;
   justify-content:space-between;
+  align-items:center;
   margin-bottom:10px;
-  font-weight:bold;
+  font-weight:800;
 }
-.order{
+.orderBtn{
   width:100%;
   border:0;
+  border-radius:16px;
   background:#2563eb;
   color:white;
   padding:15px;
-  border-radius:16px;
-  font-size:16px;
-  font-weight:bold;
+  font-size:17px;
+  font-weight:900;
 }
-.empty{
-  padding:30px;
+.footer{
   text-align:center;
-  color:#6b7280;
+  color:#64748b;
+  font-size:13px;
+  padding-top:6px;
 }
 </style>
 </head>
 
 <body>
 
-<div class="header">
-  <h1>🚀 BotFlow AI Menu</h1>
-  <p>Tez, qulay va aqlli buyurtma</p>
+<div class="top">
+  <div class="brand">🚀 BotFlow AI Menu</div>
+  <div class="sub">Telegram ichida tezkor buyurtma</div>
 </div>
 
-<div class="search">
+<div class="searchBox">
   <input id="search" placeholder="🔍 Mahsulot qidirish..." oninput="renderMenu()" />
 </div>
 
 <div class="tabs" id="tabs"></div>
 
 <div class="banner">
-  <b>🔥 Bugungi tavsiya</b>
-  <p>Menu’dan taom tanlang, savatga qo‘shing va buyurtma yuboring.</p>
+  <div class="bannerTitle">🔥 Bugungi tavsiya</div>
+  <div class="bannerText">Taom tanlang, savatga qo‘shing va buyurtmani yuboring.</div>
 </div>
 
+<div class="sectionTitle" id="sectionTitle">Menu</div>
 <div class="grid" id="grid"></div>
 
 <div class="cart">
-  <div class="cartTop">
+  <div class="cartRow">
     <span id="cartCount">🛒 Savat bo‘sh</span>
     <span id="cartTotal">0 UZS</span>
   </div>
-  <button class="order" onclick="sendOrder()">✅ Buyurtma berish</button>
+  <button class="orderBtn" onclick="sendOrder()">✅ Buyurtma berish</button>
+  <div class="footer">@botflow_support_bot</div>
 </div>
 
 <script>
 const menus = ${JSON.stringify(menus)};
-let currentRestaurant = Object.keys(menus)[0];
+const restaurantIds = Object.keys(menus);
+let currentRestaurant = restaurantIds[0] || null;
 let cart = [];
 
 const images = {
@@ -217,19 +306,20 @@ const images = {
 };
 
 function money(n){
-  return Number(n || 0).toLocaleString() + " UZS";
+  return Number(n || 0).toLocaleString("ru-RU") + " UZS";
 }
 
 function renderTabs(){
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = "";
 
-  Object.values(menus).forEach(r => {
+  restaurantIds.forEach(id => {
+    const r = menus[id] || {};
     const btn = document.createElement("button");
-    btn.innerText = r.name;
-    btn.className = r.id === currentRestaurant ? "active" : "";
+    btn.className = "tab" + (id === currentRestaurant ? " active" : "");
+    btn.innerText = r.name || id || "Restaurant";
     btn.onclick = () => {
-      currentRestaurant = r.id;
+      currentRestaurant = id;
       renderTabs();
       renderMenu();
     };
@@ -237,19 +327,29 @@ function renderTabs(){
   });
 }
 
-function itemQty(key){
+function getQty(key){
   return cart.filter(i => i.key === key && i.restaurantId === currentRestaurant).length;
 }
 
 function renderMenu(){
   const grid = document.getElementById("grid");
-  const search = document.getElementById("search").value.toLowerCase();
+  const title = document.getElementById("sectionTitle");
+  const search = (document.getElementById("search").value || "").toLowerCase();
+
   grid.innerHTML = "";
 
+  if(!currentRestaurant || !menus[currentRestaurant]){
+    grid.innerHTML = '<div class="empty">Menu topilmadi</div>';
+    return;
+  }
+
   const restaurant = menus[currentRestaurant];
-  const entries = Object.entries(restaurant.menu || {}).filter(([key,item]) =>
-    item.name.toLowerCase().includes(search)
-  );
+  title.innerText = restaurant.name || "Menu";
+
+  const entries = Object.entries(restaurant.menu || {}).filter(([key,item]) => {
+    const name = (item.name || "").toLowerCase();
+    return name.includes(search);
+  });
 
   if(!entries.length){
     grid.innerHTML = '<div class="empty">Mahsulot topilmadi</div>';
@@ -257,27 +357,25 @@ function renderMenu(){
   }
 
   entries.forEach(([key,item]) => {
-    const qty = itemQty(key);
-    const div = document.createElement("div");
-    div.className = "card";
-
-    div.innerHTML = \`
+    const qty = getQty(key);
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = \`
       <img src="\${images[key] || images.burger}" />
-      <div class="body">
-        <div class="name">\${item.name}</div>
+      <div class="cardBody">
+        <div class="itemName">\${item.name || "Mahsulot"}</div>
         <div class="price">\${money(item.price)}</div>
         <div class="controls">
-          <button class="add" onclick="addToCart('\${key}')">+ Qo‘shish</button>
+          <button class="addBtn" onclick="addToCart('\${key}')">+ Qo‘shish</button>
           <div class="qty">
             <button onclick="removeFromCart('\${key}')">−</button>
-            <b>\${qty}</b>
+            <span>\${qty}</span>
             <button onclick="addToCart('\${key}')">+</button>
           </div>
         </div>
       </div>
     \`;
-
-    grid.appendChild(div);
+    grid.appendChild(card);
   });
 }
 
@@ -288,7 +386,7 @@ function addToCart(key){
     key,
     restaurantId: currentRestaurant,
     name: item.name,
-    price: Number(item.price)
+    price: Number(item.price || 0)
   });
 
   renderCart();
@@ -306,9 +404,11 @@ function removeFromCart(key){
 }
 
 function renderCart(){
-  const total = cart.reduce((s,i)=>s+i.price,0);
+  const total = cart.reduce((sum,item)=>sum + Number(item.price || 0),0);
+
   document.getElementById("cartCount").innerText =
     cart.length ? "🛒 " + cart.length + " ta mahsulot" : "🛒 Savat bo‘sh";
+
   document.getElementById("cartTotal").innerText = money(total);
 }
 
@@ -319,16 +419,22 @@ function sendOrder(){
   }
 
   const restaurantId = cart[0].restaurantId;
-  const cleanCart = cart.filter(i => i.restaurantId === restaurantId);
+  const items = cart.filter(i => i.restaurantId === restaurantId);
+  const total = items.reduce((sum,item)=>sum + Number(item.price || 0),0);
 
-  Telegram.WebApp.sendData(JSON.stringify({
+  const payload = {
     type: "web_order",
     restaurantId,
-    items: cleanCart,
-    total: cleanCart.reduce((s,i)=>s+i.price,0)
-  }));
+    items,
+    total
+  };
 
-  Telegram.WebApp.close();
+  if(window.Telegram && Telegram.WebApp){
+    Telegram.WebApp.sendData(JSON.stringify(payload));
+    Telegram.WebApp.close();
+  } else {
+    alert(JSON.stringify(payload));
+  }
 }
 
 renderTabs();
