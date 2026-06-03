@@ -9,7 +9,12 @@ const sessions = {};
 let restaurants = {};
 
 async function loadMenus() {
-  restaurants = await getMenus();
+  try {
+    restaurants = await getMenus();
+  } catch (error) {
+    console.log("Menu load error:", error.message);
+    restaurants = {};
+  }
 }
 
 function money(n) {
@@ -28,6 +33,7 @@ function getSession(chatId) {
       step: "idle",
     };
   }
+
   return sessions[chatId];
 }
 
@@ -50,12 +56,7 @@ function isAdminGroup(chatId) {
 function mainKeyboard() {
   return {
     reply_markup: {
-      keyboard: [
-        [
-          { text: "📋 Menu", web_app: { url: `${APP_URL}/menu` } },
-        ],
-        ["❌ Bekor qilish"],
-      ],
+      keyboard: [[{ text: "📋 Menu", web_app: { url: `${APP_URL}/menu` } }], ["❌ Bekor qilish"]],
       resize_keyboard: true,
     },
   };
@@ -94,13 +95,63 @@ function statusKeyboard(orderId, chatId) {
     reply_markup: {
       inline_keyboard: [
         [{ text: "✅ Qabul", callback_data: `status_accepted_${orderId}_${chatId}` }],
-        [{ text: "👨‍🍳 Tayyor", callback_data: `status_cooking_${orderId}_${chatId}` }],
+        [{ text: "👨‍🍳 Tayyorlanmoqda", callback_data: `status_cooking_${orderId}_${chatId}` }],
         [{ text: "🚗 Yo‘lda", callback_data: `status_delivery_${orderId}_${chatId}` }],
         [{ text: "🎉 Yetkazildi", callback_data: `status_delivered_${orderId}_${chatId}` }],
         [{ text: "❌ Bekor", callback_data: `status_cancelled_${orderId}_${chatId}` }],
       ],
     },
   };
+}
+
+function clientStatusMessage(action, orderId) {
+  if (action === "accepted") {
+    return `✅ Buyurtmangiz qabul qilindi
+
+🏷 ${orderId}
+👨‍🍳 Oshxona buyurtmani tayyorlashni boshlaydi.`;
+  }
+
+  if (action === "cooking") {
+    return `👨‍🍳 Buyurtmangiz tayyorlanmoqda
+
+🏷 ${orderId}
+⏱ Taxminiy vaqt: 20–30 daqiqa`;
+  }
+
+  if (action === "delivery") {
+    return `🚗 Buyurtmangiz yo‘lga chiqdi
+
+🏷 ${orderId}
+📍 Kuryer manzilingizga yetib bormoqda.`;
+  }
+
+  if (action === "delivered") {
+    return `🎉 Buyurtmangiz yetkazildi
+
+🏷 ${orderId}
+Yoqimli ishtaha! BotFlow AI xizmatidan foydalanganingiz uchun rahmat.`;
+  }
+
+  if (action === "cancelled") {
+    return `❌ Buyurtmangiz bekor qilindi
+
+🏷 ${orderId}
+Qo‘shimcha ma’lumot uchun operator bilan bog‘laning.`;
+  }
+
+  return `📌 Buyurtmangiz holati yangilandi
+
+🏷 ${orderId}`;
+}
+
+function adminStatusText(action) {
+  if (action === "accepted") return "✅ Qabul qilindi";
+  if (action === "cooking") return "👨‍🍳 Tayyorlanmoqda";
+  if (action === "delivery") return "🚗 Yo‘lda";
+  if (action === "delivered") return "🎉 Yetkazildi";
+  if (action === "cancelled") return "❌ Bekor qilindi";
+  return "📌 Status yangilandi";
 }
 
 async function createOrder(bot, chatId, fromUser = null) {
@@ -237,11 +288,7 @@ Buyurtma berish uchun pastdagi 📋 Menu tugmasini bosing.`,
       return bot.sendMessage(chatId, "❌ Bekor qilindi.", mainKeyboard());
     }
 
-    return bot.sendMessage(
-      chatId,
-      "📋 Buyurtma berish uchun Menu tugmasini bosing.",
-      mainKeyboard()
-    );
+    return bot.sendMessage(chatId, "📋 Buyurtma berish uchun Menu tugmasini bosing.", mainKeyboard());
   });
 
   bot.on("callback_query", async (query) => {
@@ -256,11 +303,22 @@ Buyurtma berish uchun pastdagi 📋 Menu tugmasini bosing.`,
       const orderId = parts[2];
       const customerChatId = parts[3];
 
-      const statusText = STATUSES[action] || "📌 Status yangilandi";
+      const statusText = adminStatusText(action);
+      const clientText = clientStatusMessage(action, orderId);
 
       await updateOrderStatus(orderId, statusText);
-      await bot.sendMessage(customerChatId, `📌 Buyurtma holati:\n\n${statusText}`);
-      await bot.sendMessage(chatId, `✅ ${orderId}\n\n${statusText}`);
+
+      await bot.sendMessage(customerChatId, clientText, mainKeyboard());
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Admin status yangilandi
+
+🏷 ${orderId}
+📌 ${statusText}`
+      );
+
+      return;
     }
   });
 }
