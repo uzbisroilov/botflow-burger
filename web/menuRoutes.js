@@ -339,6 +339,51 @@ function renderCart(){
   document.getElementById("cartTotal").innerText = money(total);
 }
 
+function autoDetectLocation(){
+  if(!navigator.geolocation){
+    document.getElementById("locationInfo").innerText =
+      "GPS ishlamadi, xaritadan tanlang";
+    return;
+  }
+
+  document.getElementById("locationInfo").innerText =
+    "🎯 Lokatsiya avtomatik aniqlanmoqda...";
+
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      userLocation = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude
+      };
+
+      selectedLatLng = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+
+      document.getElementById("locationInfo").innerText =
+        "✅ Lokatsiya avtomatik aniqlandi";
+
+      document.getElementById("address").value =
+        "📍 GPS orqali avtomatik aniqlandi";
+
+      if(map && marker){
+        marker.setLatLng([selectedLatLng.lat, selectedLatLng.lng]);
+        map.setView([selectedLatLng.lat, selectedLatLng.lng], 17);
+      }
+    },
+    function(){
+      document.getElementById("locationInfo").innerText =
+        "GPS ruxsat olmadi, xaritadan tanlang";
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0
+    }
+  );
+}
+
 function openCheckout(){
   if(!cart.length){
     alert("Savat bo‘sh");
@@ -346,6 +391,10 @@ function openCheckout(){
   }
 
   document.getElementById("checkoutOverlay").style.display = "flex";
+
+  setTimeout(() => {
+    autoDetectLocation();
+  }, 500);
 }
 
 function closeCheckout(){
@@ -395,37 +444,19 @@ function closeMapPicker(){
 }
 
 function useGPS(){
-  if(!navigator.geolocation){
-    alert("GPS ishlamayapti. Xaritadan joyni tanlang.");
-    return;
-  }
+  autoDetectLocation();
 
-  document.getElementById("mapHint").innerText = "🎯 GPS aniqlanmoqda...";
-
-  navigator.geolocation.getCurrentPosition(
-    function(pos){
-      selectedLatLng = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-
+  setTimeout(() => {
+    if(selectedLatLng && map && marker){
       marker.setLatLng([selectedLatLng.lat, selectedLatLng.lng]);
       map.setView([selectedLatLng.lat, selectedLatLng.lng], 17);
-
       document.getElementById("mapHint").innerText =
         "✅ GPS orqali lokatsiya aniqlandi";
-    },
-    function(){
+    } else {
       document.getElementById("mapHint").innerText =
         "GPS ruxsat olmadi. Xaritadan pin qo‘ying.";
-      alert("GPS ruxsat olmadi. Xaritadan joyni tanlang.");
-    },
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
     }
-  );
+  }, 1500);
 }
 
 function confirmMapLocation(){
@@ -498,6 +529,10 @@ renderCart();
 if(window.Telegram && Telegram.WebApp){
   Telegram.WebApp.ready();
   Telegram.WebApp.expand();
+
+  setTimeout(() => {
+    autoDetectLocation();
+  }, 1000);
 }
 </script>
 
