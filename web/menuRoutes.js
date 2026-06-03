@@ -37,7 +37,6 @@ function normalizeMenus(rawMenus) {
 
   Object.entries(source).forEach(([key, value]) => {
     const restaurantId = value.id || key;
-
     result[restaurantId] = {
       id: restaurantId,
       name: value.name || restaurantId,
@@ -65,6 +64,10 @@ function menuRoutes(app) {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <title>BotFlow AI Menu</title>
 
 <style>
@@ -95,7 +98,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans
 .qty button{width:30px;height:30px;border:0;border-radius:50%;background:#111827;color:white;font-size:18px;font-weight:900}
 .qty span{min-width:18px;text-align:center;font-weight:900}
 .empty{grid-column:1/3;text-align:center;color:#64748b;padding:40px 10px}
-.cart{position:fixed;left:0;right:0;bottom:0;background:white;padding:14px;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -8px 24px rgba(15,23,42,.14)}
+.cart{position:fixed;left:0;right:0;bottom:0;background:white;padding:14px;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -8px 24px rgba(15,23,42,.14);z-index:20}
 .cartRow{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-weight:800}
 .orderBtn{width:100%;border:0;border-radius:16px;background:#2563eb;color:white;padding:15px;font-size:17px;font-weight:900}
 .checkoutOverlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-end;z-index:50}
@@ -111,6 +114,16 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans
 .cancelBtn{flex:1;border:0;border-radius:16px;background:#e5e7eb;padding:14px;font-weight:900}
 .submitBtn{flex:2;border:0;border-radius:16px;background:#16a34a;color:white;padding:14px;font-weight:900}
 .footer{text-align:center;color:#64748b;font-size:13px;padding-top:6px}
+
+.mapOverlay{position:fixed;inset:0;background:white;display:none;z-index:100}
+.mapHeader{height:58px;background:#111827;color:white;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-weight:900;font-size:18px}
+.mapHeader button{border:0;background:transparent;color:white;font-size:24px}
+#map{height:calc(100vh - 180px);width:100%}
+.mapBottom{height:122px;padding:12px;background:white;box-shadow:0 -6px 18px rgba(15,23,42,.18)}
+.mapHint{font-weight:800;margin-bottom:10px;color:#111827}
+.mapActions{display:flex;gap:10px}
+.gpsBtn{flex:1;border:0;border-radius:14px;background:#111827;color:white;padding:14px;font-weight:900}
+.confirmMapBtn{flex:1;border:0;border-radius:14px;background:#16a34a;color:white;padding:14px;font-weight:900}
 </style>
 </head>
 
@@ -153,7 +166,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans
       <input id="phone" placeholder="+998 90 123 45 67" />
     </div>
 
-    <button class="locationBtn" onclick="getLocation()">📍 Mening lokatsiyam</button>
+    <button class="locationBtn" onclick="openMapPicker()">🗺 Xaritadan lokatsiya tanlash</button>
     <div class="locationInfo" id="locationInfo"></div>
 
     <div class="field">
@@ -177,12 +190,35 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans
   </div>
 </div>
 
+<div class="mapOverlay" id="mapOverlay">
+  <div class="mapHeader">
+    <span>📍 Yetkazish manzili</span>
+    <button onclick="closeMapPicker()">×</button>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="mapBottom">
+    <div class="mapHint" id="mapHint">Xaritada joyni bosing yoki GPS ni sinab ko‘ring</div>
+    <div class="mapActions">
+      <button class="gpsBtn" onclick="useGPS()">🎯 GPS</button>
+      <button class="confirmMapBtn" onclick="confirmMapLocation()">✅ Tanlash</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const menus = ${JSON.stringify(menus)};
 const restaurantIds = Object.keys(menus);
 let currentRestaurant = restaurantIds[0] || null;
 let cart = [];
 let userLocation = null;
+
+let map = null;
+let marker = null;
+let selectedLatLng = null;
+
+const defaultCenter = [41.311081, 69.240562];
 
 const images = {
   burger: "https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg",
@@ -316,56 +352,100 @@ function closeCheckout(){
   document.getElementById("checkoutOverlay").style.display = "none";
 }
 
-function getLocation(){
-  if(window.Telegram && Telegram.WebApp){
-    Telegram.WebApp.expand();
-  }
+function openMapPicker(){
+  document.getElementById("mapOverlay").style.display = "block";
 
+  setTimeout(() => {
+    if(!map){
+      map = L.map("map").setView(defaultCenter, 14);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap"
+      }).addTo(map);
+
+      marker = L.marker(defaultCenter, { draggable: true }).addTo(map);
+      selectedLatLng = { lat: defaultCenter[0], lng: defaultCenter[1] };
+
+      map.on("click", function(e){
+        selectedLatLng = e.latlng;
+        marker.setLatLng(e.latlng);
+        document.getElementById("mapHint").innerText =
+          "✅ Lokatsiya tanlandi";
+      });
+
+      marker.on("dragend", function(){
+        selectedLatLng = marker.getLatLng();
+        document.getElementById("mapHint").innerText =
+          "✅ Lokatsiya tanlandi";
+      });
+    }
+
+    map.invalidateSize();
+
+    if(selectedLatLng){
+      map.setView([selectedLatLng.lat, selectedLatLng.lng], 16);
+      marker.setLatLng([selectedLatLng.lat, selectedLatLng.lng]);
+    }
+  }, 300);
+}
+
+function closeMapPicker(){
+  document.getElementById("mapOverlay").style.display = "none";
+}
+
+function useGPS(){
   if(!navigator.geolocation){
-    alert("Telefon lokatsiyani qo‘llamaydi");
+    alert("GPS ishlamayapti. Xaritadan joyni tanlang.");
     return;
   }
 
-  document.getElementById("locationInfo").innerText =
-    "📍 Lokatsiya olinmoqda...";
+  document.getElementById("mapHint").innerText = "🎯 GPS aniqlanmoqda...";
 
   navigator.geolocation.getCurrentPosition(
-    function(position){
-      userLocation = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
+    function(pos){
+      selectedLatLng = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
       };
 
-      document.getElementById("locationInfo").innerText =
-        "✅ Lokatsiya muvaffaqiyatli olindi";
+      marker.setLatLng([selectedLatLng.lat, selectedLatLng.lng]);
+      map.setView([selectedLatLng.lat, selectedLatLng.lng], 17);
 
-      document.getElementById("address").value =
-        "📍 GPS lokatsiya yuborildi";
+      document.getElementById("mapHint").innerText =
+        "✅ GPS orqali lokatsiya aniqlandi";
     },
-    function(error){
-      let message = "Lokatsiya olinmadi";
-
-      if(error.code === 1){
-        message = "❌ Lokatsiyaga ruxsat berilmadi";
-      }
-
-      if(error.code === 2){
-        message = "❌ GPS aniqlanmadi";
-      }
-
-      if(error.code === 3){
-        message = "❌ Timeout bo‘ldi";
-      }
-
-      document.getElementById("locationInfo").innerText = message;
-      alert(message);
+    function(){
+      document.getElementById("mapHint").innerText =
+        "GPS ruxsat olmadi. Xaritadan pin qo‘ying.";
+      alert("GPS ruxsat olmadi. Xaritadan joyni tanlang.");
     },
     {
       enableHighAccuracy: true,
-      timeout: 15000,
+      timeout: 10000,
       maximumAge: 0
     }
   );
+}
+
+function confirmMapLocation(){
+  if(!selectedLatLng){
+    alert("Xaritadan joy tanlang");
+    return;
+  }
+
+  userLocation = {
+    latitude: selectedLatLng.lat,
+    longitude: selectedLatLng.lng
+  };
+
+  document.getElementById("locationInfo").innerText =
+    "✅ Lokatsiya tanlandi";
+
+  document.getElementById("address").value =
+    "🗺 Xaritadan lokatsiya tanlandi";
+
+  closeMapPicker();
 }
 
 function sendOrder(){
@@ -384,7 +464,7 @@ function sendOrder(){
   }
 
   if(!address && !userLocation){
-    alert("Manzil kiriting yoki lokatsiya yuboring");
+    alert("Manzil kiriting yoki xaritadan lokatsiya tanlang");
     return;
   }
 
@@ -398,7 +478,7 @@ function sendOrder(){
     items,
     total,
     phone,
-    address: address || "Lokatsiya yuborildi",
+    address: address || "Xaritadan lokatsiya tanlandi",
     paymentType,
     location: userLocation
   };
