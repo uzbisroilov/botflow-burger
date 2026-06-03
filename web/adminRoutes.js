@@ -34,6 +34,13 @@ function money(n) {
   return Number(n || 0).toLocaleString("ru-RU");
 }
 
+function restaurantTitle(id) {
+  if (id === "burger") return "🍔 BotFlow Burger";
+  if (id === "sushi") return "🍣 Sushi Master";
+  if (id === "coffee") return "☕ Coffee Time";
+  return "🏪 Restaurant";
+}
+
 function statusLabel(action) {
   if (action === "accepted") return "✅ Qabul qilindi";
   if (action === "cooking") return "👨‍🍳 Tayyorlanmoqda";
@@ -44,12 +51,43 @@ function statusLabel(action) {
 }
 
 function clientMessage(action, orderId) {
-  if (action === "accepted") return `✅ Buyurtmangiz qabul qilindi\n\n🏷 ${orderId}\n👨‍🍳 Tayyorlash boshlandi`;
-  if (action === "cooking") return `👨‍🍳 Buyurtmangiz tayyorlanmoqda\n\n🏷 ${orderId}\n⏱ Tez orada tayyor bo‘ladi`;
-  if (action === "delivery") return `🚗 Buyurtmangiz yo‘lda\n\n🏷 ${orderId}\n📍 Kuryer sizga yaqinlashmoqda`;
-  if (action === "delivered") return `🎉 Buyurtma yetkazildi\n\n🏷 ${orderId}\nYoqimli ishtaha 😋`;
-  if (action === "cancelled") return `❌ Buyurtma bekor qilindi\n\n🏷 ${orderId}`;
-  return `📌 Status yangilandi`;
+  if (action === "accepted") {
+    return `✅ Buyurtmangiz qabul qilindi
+
+🏷 ${orderId}
+👨‍🍳 Oshxona buyurtmani tayyorlashni boshlaydi.`;
+  }
+
+  if (action === "cooking") {
+    return `👨‍🍳 Buyurtmangiz tayyorlanmoqda
+
+🏷 ${orderId}
+⏱ Taxminiy vaqt: 20–30 daqiqa`;
+  }
+
+  if (action === "delivery") {
+    return `🚗 Buyurtmangiz yo‘lga chiqdi
+
+🏷 ${orderId}
+📍 Kuryer manzilingizga yetib bormoqda.`;
+  }
+
+  if (action === "delivered") {
+    return `🎉 Buyurtmangiz yetkazildi
+
+🏷 ${orderId}
+Yoqimli ishtaha! BotFlow AI xizmatidan foydalanganingiz uchun rahmat.`;
+  }
+
+  if (action === "cancelled") {
+    return `❌ Buyurtmangiz bekor qilindi
+
+🏷 ${orderId}`;
+  }
+
+  return `📌 Buyurtmangiz holati yangilandi
+
+🏷 ${orderId}`;
 }
 
 function statusColor(status = "") {
@@ -61,12 +99,41 @@ function statusColor(status = "") {
   return "#111827";
 }
 
-function renderDashboard({ orders, title, subtitle, scopedRestaurantId = "" }) {
+function statusStep(status = "") {
+  if (status.includes("Qabul")) return 25;
+  if (status.includes("Tayyor")) return 50;
+  if (status.includes("Yo‘lda")) return 75;
+  if (status.includes("Yetkazildi")) return 100;
+  if (status.includes("Bekor")) return 0;
+  return 10;
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderDashboard({ orders, mode = "super", restaurantId = "" }) {
+  const title =
+    mode === "super"
+      ? "🚀 BotFlow AI Super Admin"
+      : `${restaurantTitle(restaurantId)} Owner Panel`;
+
+  const subtitle =
+    mode === "super"
+      ? "Barcha restoranlar uchun professional boshqaruv paneli"
+      : "Faqat shu restoranga tegishli buyurtmalar";
+
+  const today = new Date().toISOString().slice(0, 10);
+
   const revenue = orders
     .filter((o) => (o.status || "").includes("Yetkazildi"))
     .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
-  const today = new Date().toISOString().slice(0, 10);
   const todayOrders = orders.filter((o) => (o.createdAt || "").startsWith(today));
 
   const activeOrders = orders.filter(
@@ -79,6 +146,107 @@ function renderDashboard({ orders, title, subtitle, scopedRestaurantId = "" }) {
     (o.status || "").includes("Yetkazildi")
   );
 
+  const latestOrders = [...orders].reverse();
+
+  const orderCards = latestOrders
+    .map((order) => {
+      const mapLink =
+        order.location && order.location.latitude && order.location.longitude
+          ? `https://maps.google.com/?q=${order.location.latitude},${order.location.longitude}`
+          : "";
+
+      const status = order.status || "🆕 Yangi";
+      const progress = statusStep(status);
+
+      return `
+        <div class="order-card" id="card-${escapeHtml(order.orderId)}">
+          <div class="order-head">
+            <div>
+              <div class="order-id">${escapeHtml(order.orderId)}</div>
+              <div class="restaurant-name">${escapeHtml(order.restaurant || "-")}</div>
+            </div>
+
+            <div class="status-badge" id="status-${escapeHtml(order.orderId)}" style="background:${statusColor(status)}">
+              ${escapeHtml(status)}
+            </div>
+          </div>
+
+          <div class="progress-wrap">
+            <div class="progress-line">
+              <div class="progress-fill" id="progress-${escapeHtml(order.orderId)}" style="width:${progress}%"></div>
+            </div>
+            <div class="progress-steps">
+              <span>Qabul</span>
+              <span>Tayyor</span>
+              <span>Yo‘lda</span>
+              <span>Finish</span>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-box">
+              <span>👤 Mijoz</span>
+              <b>${escapeHtml(order.customer || "-")}</b>
+            </div>
+
+            <div class="info-box">
+              <span>📞 Telefon</span>
+              <b>${escapeHtml(order.phone || "-")}</b>
+            </div>
+
+            <div class="info-box">
+              <span>📍 Manzil</span>
+              <b>${escapeHtml(order.address || "-")}</b>
+            </div>
+
+            <div class="info-box">
+              <span>💳 To‘lov</span>
+              <b>${escapeHtml(order.paymentName || "-")}</b>
+            </div>
+          </div>
+
+          <div class="items-box">
+            <div class="items-title">🍽 Mahsulotlar</div>
+
+            ${(order.items || [])
+              .map(
+                (item) => `
+                  <div class="item-row">
+                    <span>${escapeHtml(item.name || "-")}</span>
+                    <b>${money(item.price)} so‘m</b>
+                  </div>
+                `
+              )
+              .join("")}
+
+            <div class="total-row">
+              <span>Jami</span>
+              <b>${money(order.total)} so‘m</b>
+            </div>
+          </div>
+
+          ${
+            mapLink
+              ? `
+                <a href="${mapLink}" target="_blank">
+                  <button class="map-btn">🗺 Google Maps ochish</button>
+                </a>
+              `
+              : ""
+          }
+
+          <div class="actions">
+            <button class="btn accept" onclick="setStatus('${escapeHtml(order.orderId)}','accepted')">✅ Qabul</button>
+            <button class="btn cooking" onclick="setStatus('${escapeHtml(order.orderId)}','cooking')">👨‍🍳 Tayyorlanmoqda</button>
+            <button class="btn delivery" onclick="setStatus('${escapeHtml(order.orderId)}','delivery')">🚗 Yo‘lda</button>
+            <button class="btn delivered" onclick="setStatus('${escapeHtml(order.orderId)}','delivered')">🎉 Yetkazildi</button>
+            <button class="btn cancel" onclick="setStatus('${escapeHtml(order.orderId)}','cancelled')">❌ Bekor qilish</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
   return `
 <!DOCTYPE html>
 <html>
@@ -86,49 +254,350 @@ function renderDashboard({ orders, title, subtitle, scopedRestaurantId = "" }) {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BotFlow AI Admin</title>
+
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}
-body{background:#f3f5f9;padding:20px;color:#111827}
-.header{background:linear-gradient(135deg,#111827,#1e293b);color:white;padding:28px;border-radius:30px;margin-bottom:24px}
-.title{font-size:34px;font-weight:900}
-.subtitle{margin-top:8px;color:#cbd5e1}
-.nav{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
-.nav a{color:white;text-decoration:none;background:rgba(255,255,255,.12);padding:10px 14px;border-radius:999px;font-weight:900}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
-.stat{background:white;border-radius:24px;padding:18px;box-shadow:0 10px 26px rgba(15,23,42,.08)}
-.statTitle{color:#64748b;font-size:14px;font-weight:700}
-.statValue{margin-top:10px;font-size:28px;font-weight:900}
-.ordersTitle{font-size:28px;font-weight:900;margin-bottom:18px}
-.orders{display:flex;flex-direction:column;gap:18px}
-.card{background:white;border-radius:28px;padding:18px;box-shadow:0 10px 26px rgba(15,23,42,.08)}
-.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.orderId{font-size:22px;font-weight:900}
-.restaurant{margin-top:4px;color:#64748b;font-weight:700}
-.status{color:white;padding:10px 14px;border-radius:999px;font-size:13px;font-weight:900}
-.infoGrid{margin-top:18px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.info{background:#f8fafc;border-radius:18px;padding:14px}
-.info span{color:#64748b;font-size:13px;font-weight:700}
-.info b{display:block;margin-top:6px;word-break:break-word}
-.items{margin-top:16px;background:#f8fafc;border-radius:20px;padding:14px}
-.itemsTitle{font-weight:900;margin-bottom:10px}
-.item{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px}
-.total{margin-top:12px;padding-top:12px;border-top:1px solid #dbe1e8;display:flex;justify-content:space-between;font-size:18px;font-weight:900}
-.actions{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.btn{border:0;border-radius:18px;padding:16px;color:white;font-size:15px;font-weight:900;cursor:pointer}
-.accept{background:#2563eb}.cooking{background:#f59e0b}.delivery{background:#8b5cf6}.done{background:#16a34a}
-.cancel{background:#ef4444;grid-column:1/3}
-.mapBtn{width:100%;margin-top:14px;border:0;border-radius:18px;padding:16px;background:#111827;color:white;font-weight:900}
-.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#111827;color:white;padding:14px 20px;border-radius:999px;display:none;font-weight:900}
-.refresh{position:fixed;right:24px;bottom:24px;width:68px;height:68px;border-radius:50%;border:0;background:#2563eb;color:white;font-size:28px;font-weight:900;cursor:pointer}
-.empty{background:white;border-radius:24px;padding:40px;text-align:center;color:#64748b;font-weight:900}
-@media(max-width:900px){.stats{grid-template-columns:1fr 1fr}.infoGrid{grid-template-columns:1fr}}
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:Inter,Arial,sans-serif;
+}
+
+body{
+  background:#f3f5f9;
+  color:#111827;
+  padding:22px;
+}
+
+.hero{
+  background:linear-gradient(135deg,#0f172a,#1e293b);
+  color:white;
+  border-radius:34px;
+  padding:30px;
+  margin-bottom:24px;
+  box-shadow:0 18px 42px rgba(15,23,42,.22);
+}
+
+.hero-top{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:center;
+}
+
+.title{
+  font-size:34px;
+  font-weight:950;
+  letter-spacing:-.7px;
+}
+
+.subtitle{
+  margin-top:8px;
+  color:#cbd5e1;
+  font-size:15px;
+  font-weight:600;
+}
+
+.mode-badge{
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.18);
+  padding:10px 14px;
+  border-radius:999px;
+  font-weight:900;
+  white-space:nowrap;
+}
+
+.nav{
+  margin-top:22px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.nav a{
+  color:white;
+  text-decoration:none;
+  background:rgba(255,255,255,.12);
+  padding:11px 15px;
+  border-radius:999px;
+  font-weight:900;
+  font-size:14px;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;
+  margin-bottom:26px;
+}
+
+.stat{
+  background:white;
+  border-radius:26px;
+  padding:20px;
+  box-shadow:0 12px 30px rgba(15,23,42,.08);
+}
+
+.stat span{
+  display:block;
+  color:#64748b;
+  font-size:14px;
+  font-weight:800;
+}
+
+.stat b{
+  display:block;
+  margin-top:10px;
+  font-size:28px;
+  font-weight:950;
+}
+
+.section-title{
+  font-size:28px;
+  font-weight:950;
+  margin-bottom:18px;
+}
+
+.orders{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+}
+
+.order-card{
+  background:white;
+  border-radius:32px;
+  padding:22px;
+  box-shadow:0 14px 34px rgba(15,23,42,.09);
+}
+
+.order-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+}
+
+.order-id{
+  font-size:23px;
+  font-weight:950;
+  letter-spacing:-.3px;
+}
+
+.restaurant-name{
+  margin-top:4px;
+  color:#64748b;
+  font-weight:800;
+}
+
+.status-badge{
+  color:white;
+  padding:10px 15px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:950;
+  white-space:nowrap;
+}
+
+.progress-wrap{
+  margin-top:18px;
+  background:#f8fafc;
+  border-radius:22px;
+  padding:14px;
+}
+
+.progress-line{
+  height:12px;
+  background:#e5e7eb;
+  border-radius:999px;
+  overflow:hidden;
+}
+
+.progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,#2563eb,#16a34a);
+  border-radius:999px;
+  transition:.25s;
+}
+
+.progress-steps{
+  display:flex;
+  justify-content:space-between;
+  margin-top:9px;
+  color:#64748b;
+  font-size:12px;
+  font-weight:900;
+}
+
+.info-grid{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+
+.info-box{
+  background:#f8fafc;
+  border-radius:20px;
+  padding:14px;
+}
+
+.info-box span{
+  display:block;
+  color:#64748b;
+  font-size:13px;
+  font-weight:800;
+}
+
+.info-box b{
+  display:block;
+  margin-top:6px;
+  font-size:15px;
+  word-break:break-word;
+}
+
+.items-box{
+  margin-top:16px;
+  background:#f8fafc;
+  border-radius:24px;
+  padding:16px;
+}
+
+.items-title{
+  font-weight:950;
+  margin-bottom:12px;
+}
+
+.item-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:9px;
+  font-size:15px;
+}
+
+.total-row{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid #dbe1e8;
+  display:flex;
+  justify-content:space-between;
+  font-size:19px;
+  font-weight:950;
+}
+
+.map-btn{
+  margin-top:16px;
+  width:100%;
+  border:0;
+  border-radius:20px;
+  padding:16px;
+  background:#111827;
+  color:white;
+  font-size:15px;
+  font-weight:950;
+  cursor:pointer;
+}
+
+.actions{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+}
+
+.btn{
+  border:0;
+  border-radius:18px;
+  padding:15px;
+  color:white;
+  font-size:14px;
+  font-weight:950;
+  cursor:pointer;
+}
+
+.accept{background:#2563eb}
+.cooking{background:#f59e0b}
+.delivery{background:#8b5cf6}
+.delivered{background:#16a34a}
+.cancel{background:#ef4444}
+
+.empty{
+  background:white;
+  border-radius:28px;
+  padding:46px;
+  text-align:center;
+  color:#64748b;
+  font-weight:900;
+}
+
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:96px;
+  transform:translateX(-50%);
+  background:#111827;
+  color:white;
+  padding:15px 22px;
+  border-radius:999px;
+  display:none;
+  z-index:100;
+  font-weight:950;
+  box-shadow:0 14px 30px rgba(15,23,42,.25);
+}
+
+.refresh{
+  position:fixed;
+  right:24px;
+  bottom:24px;
+  width:68px;
+  height:68px;
+  border:0;
+  border-radius:50%;
+  background:#2563eb;
+  color:white;
+  font-size:30px;
+  font-weight:950;
+  cursor:pointer;
+  box-shadow:0 14px 30px rgba(37,99,235,.35);
+}
+
+@media(max-width:1000px){
+  .stats{grid-template-columns:1fr 1fr}
+  .info-grid{grid-template-columns:1fr 1fr}
+  .actions{grid-template-columns:1fr 1fr}
+  .cancel{grid-column:1/3}
+}
+
+@media(max-width:620px){
+  body{padding:14px}
+  .hero{padding:22px;border-radius:28px}
+  .hero-top{align-items:flex-start;flex-direction:column}
+  .title{font-size:28px}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat b{font-size:23px}
+  .info-grid{grid-template-columns:1fr}
+  .order-head{flex-direction:column}
+  .actions{grid-template-columns:1fr}
+  .cancel{grid-column:auto}
+}
 </style>
 </head>
+
 <body>
 
-<div class="header">
-  <div class="title">${title}</div>
-  <div class="subtitle">${subtitle}</div>
+<div class="hero">
+  <div class="hero-top">
+    <div>
+      <div class="title">${title}</div>
+      <div class="subtitle">${subtitle}</div>
+    </div>
+
+    <div class="mode-badge">
+      ${mode === "super" ? "SUPER ADMIN" : "OWNER PANEL"}
+    </div>
+  </div>
+
   <div class="nav">
     <a href="/admin">Super Admin</a>
     <a href="/admin/burger?key=burger123">Burger Owner</a>
@@ -138,70 +607,23 @@ body{background:#f3f5f9;padding:20px;color:#111827}
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="statTitle">💰 Revenue</div><div class="statValue">${money(revenue)} so‘m</div></div>
-  <div class="stat"><div class="statTitle">📦 Bugungi order</div><div class="statValue">${todayOrders.length}</div></div>
-  <div class="stat"><div class="statTitle">🚗 Aktiv order</div><div class="statValue">${activeOrders.length}</div></div>
-  <div class="stat"><div class="statTitle">🎉 Yetkazilgan</div><div class="statValue">${deliveredOrders.length}</div></div>
+  <div class="stat"><span>💰 Revenue</span><b>${money(revenue)} so‘m</b></div>
+  <div class="stat"><span>📦 Bugungi order</span><b>${todayOrders.length}</b></div>
+  <div class="stat"><span>🚗 Aktiv order</span><b>${activeOrders.length}</b></div>
+  <div class="stat"><span>🎉 Yetkazilgan</span><b>${deliveredOrders.length}</b></div>
 </div>
 
-<div class="ordersTitle">🛒 Buyurtmalar</div>
+<div class="section-title">🛒 Buyurtmalar</div>
 
 <div class="orders">
-${
-  orders.length
-    ? [...orders].reverse().map((order) => {
-        const mapLink = order.location
-          ? `https://maps.google.com/?q=${order.location.latitude},${order.location.longitude}`
-          : "";
-
-        return `
-<div class="card" id="card-${order.orderId}">
-  <div class="top">
-    <div>
-      <div class="orderId">${order.orderId}</div>
-      <div class="restaurant">${order.restaurant}</div>
-    </div>
-    <div class="status" id="status-${order.orderId}" style="background:${statusColor(order.status)}">
-      ${order.status || "🆕 Yangi"}
-    </div>
-  </div>
-
-  <div class="infoGrid">
-    <div class="info"><span>👤 Mijoz</span><b>${order.customer || "-"}</b></div>
-    <div class="info"><span>📞 Telefon</span><b>${order.phone || "-"}</b></div>
-    <div class="info"><span>📍 Manzil</span><b>${order.address || "-"}</b></div>
-    <div class="info"><span>💳 To‘lov</span><b>${order.paymentName || "-"}</b></div>
-  </div>
-
-  <div class="items">
-    <div class="itemsTitle">🍔 Mahsulotlar</div>
-    ${(order.items || []).map((item) => `
-      <div class="item"><span>${item.name}</span><b>${money(item.price)} so‘m</b></div>
-    `).join("")}
-    <div class="total"><span>Jami</span><span>${money(order.total)} so‘m</span></div>
-  </div>
-
-  ${mapLink ? `<a href="${mapLink}" target="_blank"><button class="mapBtn">🗺 Google Maps ochish</button></a>` : ""}
-
-  <div class="actions">
-    <button class="btn accept" onclick="setStatus('${order.orderId}','accepted')">✅ Qabul</button>
-    <button class="btn cooking" onclick="setStatus('${order.orderId}','cooking')">👨‍🍳 Tayyorlanmoqda</button>
-    <button class="btn delivery" onclick="setStatus('${order.orderId}','delivery')">🚗 Yo‘lda</button>
-    <button class="btn done" onclick="setStatus('${order.orderId}','delivered')">🎉 Yetkazildi</button>
-    <button class="btn cancel" onclick="setStatus('${order.orderId}','cancelled')">❌ Bekor qilish</button>
-  </div>
-</div>`;
-      }).join("")
-    : `<div class="empty">Hozircha orderlar yo‘q</div>`
-}
+  ${orderCards || `<div class="empty">Hozircha buyurtmalar yo‘q</div>`}
 </div>
 
 <div class="toast" id="toast">Status yangilandi</div>
+
 <button class="refresh" onclick="location.reload()">↻</button>
 
 <script>
-const scopedRestaurantId = "${scopedRestaurantId}";
-
 function color(status){
   if(status.includes("Qabul")) return "#2563eb";
   if(status.includes("Tayyor")) return "#f59e0b";
@@ -211,11 +633,22 @@ function color(status){
   return "#111827";
 }
 
+function progress(status){
+  if(status.includes("Qabul")) return 25;
+  if(status.includes("Tayyor")) return 50;
+  if(status.includes("Yo‘lda")) return 75;
+  if(status.includes("Yetkazildi")) return 100;
+  if(status.includes("Bekor")) return 0;
+  return 10;
+}
+
 function toast(text){
   const t = document.getElementById("toast");
   t.innerText = text;
   t.style.display = "block";
-  setTimeout(()=>{t.style.display = "none";},2000);
+  setTimeout(() => {
+    t.style.display = "none";
+  }, 2200);
 }
 
 async function setStatus(orderId, action){
@@ -229,21 +662,28 @@ async function setStatus(orderId, action){
     const data = await response.json();
 
     if(!data.ok){
-      toast("Xatolik");
+      toast("Xatolik: " + (data.message || "status yangilanmadi"));
       return;
     }
 
     if(data.deleted){
       const card = document.getElementById("card-" + orderId);
       if(card) card.remove();
-      toast("❌ Buyurtma o‘chirildi");
+      toast("❌ Buyurtma bekor qilindi va paneldan o‘chirildi");
       return;
     }
 
     const badge = document.getElementById("status-" + orderId);
+    const bar = document.getElementById("progress-" + orderId);
+
     badge.innerText = data.status;
     badge.style.background = color(data.status);
-    toast("✅ Status yangilandi");
+
+    if(bar){
+      bar.style.width = progress(data.status) + "%";
+    }
+
+    toast("✅ Status yangilandi va mijozga yuborildi");
   }catch(error){
     console.log(error);
     toast("Server xatosi");
@@ -252,7 +692,8 @@ async function setStatus(orderId, action){
 </script>
 
 </body>
-</html>`;
+</html>
+`;
 }
 
 function adminRoutes(app, bot) {
@@ -265,7 +706,10 @@ function adminRoutes(app, bot) {
       const order = orders.find((o) => o.orderId === orderId);
 
       if (!order) {
-        return res.status(404).json({ ok: false, message: "Order topilmadi" });
+        return res.status(404).json({
+          ok: false,
+          message: "Order topilmadi",
+        });
       }
 
       if (action === "cancelled") {
@@ -276,7 +720,10 @@ function adminRoutes(app, bot) {
           await bot.sendMessage(order.chatId, clientMessage(action, orderId));
         }
 
-        return res.json({ ok: true, deleted: true });
+        return res.json({
+          ok: true,
+          deleted: true,
+        });
       }
 
       order.status = statusLabel(action);
@@ -288,20 +735,26 @@ function adminRoutes(app, bot) {
         await bot.sendMessage(order.chatId, clientMessage(action, orderId));
       }
 
-      return res.json({ ok: true, status: order.status });
+      return res.json({
+        ok: true,
+        status: order.status,
+      });
     } catch (error) {
-      console.log(error);
-      return res.status(500).json({ ok: false, message: error.message });
+      console.log("Status update error:", error.message);
+      return res.status(500).json({
+        ok: false,
+        message: error.message,
+      });
     }
   });
 
   app.get("/admin", async (req, res) => {
     const orders = await readOrders();
+
     res.send(
       renderDashboard({
         orders,
-        title: "🚀 BotFlow AI Super Admin",
-        subtitle: "Barcha restoranlar buyurtmalari",
+        mode: "super",
       })
     );
   });
@@ -314,19 +767,20 @@ function adminRoutes(app, bot) {
       return res.status(404).send("Restaurant topilmadi");
     }
 
-    if (key !== OWNER_KEYS[restaurantId]) {
+    if (OWNER_KEYS[restaurantId] !== key) {
       return res.status(403).send("Access denied. Noto‘g‘ri key.");
     }
 
-    const orders = await readOrders();
-    const filtered = orders.filter((o) => o.restaurantId === restaurantId);
+    const allOrders = await readOrders();
+    const restaurantOrders = allOrders.filter(
+      (order) => order.restaurantId === restaurantId
+    );
 
     res.send(
       renderDashboard({
-        orders: filtered,
-        title: `🏪 ${restaurantId.toUpperCase()} Owner Panel`,
-        subtitle: "Faqat shu restoran buyurtmalari",
-        scopedRestaurantId: restaurantId,
+        orders: restaurantOrders,
+        mode: "owner",
+        restaurantId,
       })
     );
   });
