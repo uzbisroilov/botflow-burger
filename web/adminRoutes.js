@@ -3,11 +3,67 @@ const path = require("path");
 
 const ordersPath = path.join(__dirname, "../data/orders.json");
 
-const OWNER_KEYS = {
-  burger: "burger123",
-  sushi: "sushi123",
-  coffee: "coffee123",
+const USERS = {
+  admin: {
+    password: "admin123",
+    role: "super",
+    restaurantId: null,
+    title: "Super Admin",
+  },
+  burger: {
+    password: "burger123",
+    role: "owner",
+    restaurantId: "burger",
+    title: "Burger Owner",
+  },
+  sushi: {
+    password: "sushi123",
+    role: "owner",
+    restaurantId: "sushi",
+    title: "Sushi Owner",
+  },
+  coffee: {
+    password: "coffee123",
+    role: "owner",
+    restaurantId: "coffee",
+    title: "Coffee Owner",
+  },
 };
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return header.split(";").reduce((acc, item) => {
+    const [key, value] = item.trim().split("=");
+    if (key) acc[key] = decodeURIComponent(value || "");
+    return acc;
+  }, {});
+}
+
+function getUserFromCookie(req) {
+  const cookies = parseCookies(req);
+  const username = cookies.botflow_user;
+  const password = cookies.botflow_pass;
+
+  if (!username || !password) return null;
+  if (!USERS[username]) return null;
+  if (USERS[username].password !== password) return null;
+
+  return {
+    username,
+    ...USERS[username],
+  };
+}
+
+function requireAuth(req, res) {
+  const user = getUserFromCookie(req);
+
+  if (!user) {
+    res.redirect("/admin/login");
+    return null;
+  }
+
+  return user;
+}
 
 async function readOrders() {
   try {
@@ -117,7 +173,182 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#039;");
 }
 
-function renderDashboard({ orders, mode = "super", restaurantId = "" }) {
+function renderLogin(error = "") {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BotFlow AI Login</title>
+
+<style>
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:Inter,Arial,sans-serif;
+}
+
+body{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at top left, rgba(37,99,235,.28), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(22,163,74,.22), transparent 35%),
+    linear-gradient(135deg,#0f172a,#111827);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.login-card{
+  width:100%;
+  max-width:430px;
+  background:rgba(255,255,255,.96);
+  border-radius:34px;
+  padding:32px;
+  box-shadow:0 30px 80px rgba(0,0,0,.32);
+}
+
+.logo{
+  width:64px;
+  height:64px;
+  border-radius:22px;
+  background:linear-gradient(135deg,#2563eb,#16a34a);
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:30px;
+  margin-bottom:18px;
+}
+
+h1{
+  font-size:32px;
+  font-weight:950;
+  color:#111827;
+}
+
+p{
+  color:#64748b;
+  margin-top:8px;
+  line-height:1.45;
+  font-weight:600;
+}
+
+.form{
+  margin-top:26px;
+}
+
+.field{
+  margin-bottom:15px;
+}
+
+label{
+  display:block;
+  font-size:14px;
+  font-weight:900;
+  color:#111827;
+  margin-bottom:8px;
+}
+
+input{
+  width:100%;
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  border-radius:18px;
+  padding:16px;
+  font-size:16px;
+  outline:none;
+  font-weight:700;
+}
+
+input:focus{
+  border-color:#2563eb;
+  box-shadow:0 0 0 4px rgba(37,99,235,.12);
+}
+
+button{
+  width:100%;
+  border:0;
+  border-radius:20px;
+  padding:17px;
+  margin-top:8px;
+  background:linear-gradient(135deg,#2563eb,#1d4ed8);
+  color:white;
+  font-size:17px;
+  font-weight:950;
+  cursor:pointer;
+  box-shadow:0 15px 30px rgba(37,99,235,.28);
+}
+
+.error{
+  margin-top:16px;
+  background:#fee2e2;
+  color:#991b1b;
+  padding:13px;
+  border-radius:16px;
+  font-weight:800;
+  display:${error ? "block" : "none"};
+}
+
+.accounts{
+  margin-top:22px;
+  background:#f8fafc;
+  border-radius:20px;
+  padding:15px;
+  color:#64748b;
+  font-size:13px;
+  line-height:1.7;
+}
+
+.accounts b{
+  color:#111827;
+}
+</style>
+</head>
+
+<body>
+  <div class="login-card">
+    <div class="logo">🚀</div>
+
+    <h1>BotFlow AI</h1>
+    <p>Professional restaurant dashboardga kirish.</p>
+
+    <form class="form" method="POST" action="/admin/login">
+      <div class="field">
+        <label>Login</label>
+        <input name="username" placeholder="admin / burger / sushi / coffee" required />
+      </div>
+
+      <div class="field">
+        <label>Parol</label>
+        <input name="password" type="password" placeholder="Parolni kiriting" required />
+      </div>
+
+      <button type="submit">Dashboardga kirish</button>
+    </form>
+
+    <div class="error">${escapeHtml(error)}</div>
+
+    <div class="accounts">
+      <b>Demo loginlar:</b><br/>
+      admin / admin123<br/>
+      burger / burger123<br/>
+      sushi / sushi123<br/>
+      coffee / coffee123
+    </div>
+  </div>
+</body>
+</html>
+`;
+}
+
+function renderDashboard({ orders, user }) {
+  const mode = user.role;
+  const restaurantId = user.restaurantId;
+
   const title =
     mode === "super"
       ? "🚀 BotFlow AI Super Admin"
@@ -594,15 +825,20 @@ body{
     </div>
 
     <div class="mode-badge">
-      ${mode === "super" ? "SUPER ADMIN" : "OWNER PANEL"}
+      ${mode === "super" ? "SUPER ADMIN" : "OWNER PANEL"} · ${escapeHtml(user.username)}
     </div>
   </div>
 
   <div class="nav">
-    <a href="/admin">Super Admin</a>
-    <a href="/admin/burger?key=burger123">Burger Owner</a>
-    <a href="/admin/sushi?key=sushi123">Sushi Owner</a>
-    <a href="/admin/coffee?key=coffee123">Coffee Owner</a>
+    ${
+      mode === "super"
+        ? `<a href="/admin">Super Admin</a>
+           <a href="/admin?as=burger">Burger Owner</a>
+           <a href="/admin?as=sushi">Sushi Owner</a>
+           <a href="/admin?as=coffee">Coffee Owner</a>`
+        : `<a href="/admin">My Dashboard</a>`
+    }
+    <a href="/admin/logout">Logout</a>
   </div>
 </div>
 
@@ -697,8 +933,48 @@ async function setStatus(orderId, action){
 }
 
 function adminRoutes(app, bot) {
+  app.get("/admin/login", (req, res) => {
+    const user = getUserFromCookie(req);
+    if (user) return res.redirect("/admin");
+
+    return res.send(renderLogin(""));
+  });
+
+  app.post("/admin/login", (req, res) => {
+    const { username, password } = req.body || {};
+
+    if (!username || !password || !USERS[username] || USERS[username].password !== password) {
+      return res.send(renderLogin("Login yoki parol noto‘g‘ri"));
+    }
+
+    res.setHeader("Set-Cookie", [
+      `botflow_user=${encodeURIComponent(username)}; Path=/; Max-Age=604800`,
+      `botflow_pass=${encodeURIComponent(password)}; Path=/; Max-Age=604800`,
+    ]);
+
+    return res.redirect("/admin");
+  });
+
+  app.get("/admin/logout", (req, res) => {
+    res.setHeader("Set-Cookie", [
+      "botflow_user=; Path=/; Max-Age=0",
+      "botflow_pass=; Path=/; Max-Age=0",
+    ]);
+
+    return res.redirect("/admin/login");
+  });
+
   app.post("/admin/order/:orderId/status", async (req, res) => {
     try {
+      const user = getUserFromCookie(req);
+
+      if (!user) {
+        return res.status(401).json({
+          ok: false,
+          message: "Login kerak",
+        });
+      }
+
       const { orderId } = req.params;
       const { action } = req.body;
 
@@ -709,6 +985,13 @@ function adminRoutes(app, bot) {
         return res.status(404).json({
           ok: false,
           message: "Order topilmadi",
+        });
+      }
+
+      if (user.role === "owner" && order.restaurantId !== user.restaurantId) {
+        return res.status(403).json({
+          ok: false,
+          message: "Bu order sizning restoraningizga tegishli emas",
         });
       }
 
@@ -749,38 +1032,25 @@ function adminRoutes(app, bot) {
   });
 
   app.get("/admin", async (req, res) => {
-    const orders = await readOrders();
-
-    res.send(
-      renderDashboard({
-        orders,
-        mode: "super",
-      })
-    );
-  });
-
-  app.get("/admin/:restaurantId", async (req, res) => {
-    const { restaurantId } = req.params;
-    const { key } = req.query;
-
-    if (!OWNER_KEYS[restaurantId]) {
-      return res.status(404).send("Restaurant topilmadi");
-    }
-
-    if (OWNER_KEYS[restaurantId] !== key) {
-      return res.status(403).send("Access denied. Noto‘g‘ri key.");
-    }
+    const user = requireAuth(req, res);
+    if (!user) return;
 
     const allOrders = await readOrders();
-    const restaurantOrders = allOrders.filter(
-      (order) => order.restaurantId === restaurantId
-    );
 
-    res.send(
+    let orders = allOrders;
+
+    if (user.role === "owner") {
+      orders = allOrders.filter((order) => order.restaurantId === user.restaurantId);
+    }
+
+    if (user.role === "super" && req.query.as) {
+      orders = allOrders.filter((order) => order.restaurantId === req.query.as);
+    }
+
+    return res.send(
       renderDashboard({
-        orders: restaurantOrders,
-        mode: "owner",
-        restaurantId,
+        orders,
+        user,
       })
     );
   });
