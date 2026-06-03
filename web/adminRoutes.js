@@ -1,313 +1,445 @@
-const { getOrders, updateOrderStatus } = require("../services/orderService");
-const { getMenus, updateMenuItem, deleteMenuItem } = require("../services/menuService");
+const fs = require("fs-extra");
+const path = require("path");
+
+const ordersPath = path.join(__dirname, "../data/orders.json");
+
+async function readOrders() {
+  try {
+    const exists = await fs.pathExists(ordersPath);
+
+    if (!exists) {
+      await fs.writeJson(ordersPath, []);
+      return [];
+    }
+
+    return await fs.readJson(ordersPath);
+  } catch (error) {
+    console.log(error);
+    return [];
+  }
+}
 
 function money(n) {
-  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
+  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
-function isClosed(status) {
-  return status === "🎉 Yetkazildi" || status === "❌ Bekor qilindi";
+function getStatusColor(status = "") {
+  if (status.includes("Qabul")) return "#2563eb";
+  if (status.includes("Tayyor")) return "#f59e0b";
+  if (status.includes("Yo‘lda")) return "#8b5cf6";
+  if (status.includes("Yetkazildi")) return "#16a34a";
+  if (status.includes("Bekor")) return "#ef4444";
+  return "#111827";
 }
 
-function paymentLabel(order) {
-  if (order.paymentName) return order.paymentName;
-  if (order.paymentType === "click") return "💳 Click";
-  if (order.paymentType === "payme") return "💳 Payme";
-  if (order.paymentType === "cash") return "💵 Naqd";
-  return "—";
-}
+function adminRoutes(app) {
 
-function orderItemsText(order) {
-  if (!order.items || order.items.length === 0) return "-";
-  return order.items
-    .map((item, i) => `${i + 1}. ${item.name} — ${money(item.price)}`)
-    .join("<br>");
-}
+  app.get("/admin", async (req, res) => {
 
-function button(orderId, status, label, color) {
-  return `
-    <form method="POST" action="/admin/status" style="display:inline">
-      <input type="hidden" name="orderId" value="${orderId}" />
-      <input type="hidden" name="status" value="${status}" />
-      <button class="${color}">${label}</button>
-    </form>
-  `;
-}
+    const orders = await readOrders();
 
-function actionButtons(order) {
-  if (isClosed(order.status)) {
-    return `<b style="color:#6b7280;">Yakunlangan</b>`;
-  }
+    const totalRevenue = orders
+      .filter(o => o.status && o.status.includes("Yetkazildi"))
+      .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
-  return `
-    ${button(order.orderId, "✅ Qabul qilindi", "Qabul", "green")}
-    ${button(order.orderId, "👨‍🍳 Tayyorlanmoqda", "Tayyor", "orange")}
-    ${button(order.orderId, "🚗 Yo‘lda", "Yo‘lda", "blue")}
-    ${button(order.orderId, "🎉 Yetkazildi", "Yetkazildi", "purple")}
-    ${button(order.orderId, "❌ Bekor qilindi", "Bekor", "red")}
-  `;
-}
+    const today = new Date().toISOString().slice(0, 10);
 
-function analytics(orders) {
-  const revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
-  const delivered = orders.filter((o) => o.status === "🎉 Yetkazildi").length;
-  const cancelled = orders.filter((o) => o.status === "❌ Bekor qilindi").length;
-  const active = orders.filter((o) => !isClosed(o.status)).length;
+    const todayOrders = orders.filter(o =>
+      (o.createdAt || "").startsWith(today)
+    );
 
-  return { revenue, delivered, cancelled, active };
-}
+    const deliveredCount = orders.filter(o =>
+      (o.status || "").includes("Yetkazildi")
+    ).length;
 
-function restaurantLinksHtml(menus) {
-  const botUsername = "botflow_support_bot";
+    const activeCount = orders.filter(o =>
+      !(o.status || "").includes("Yetkazildi") &&
+      !(o.status || "").includes("Bekor")
+    ).length;
 
-  return Object.values(menus)
-    .map((r) => {
-      const base = `https://t.me/${botUsername}?start=restaurant_${r.id}`;
-      const table1 = `https://t.me/${botUsername}?start=restaurant_${r.id}_table_1`;
-      const table2 = `https://t.me/${botUsername}?start=restaurant_${r.id}_table_2`;
-
-      return `
-        <div class="qr-card">
-          <h3>${r.name}</h3>
-          <p><b>Owner panel:</b><br><a href="/admin/${r.id}" target="_blank">/admin/${r.id}</a></p>
-          <p><b>General:</b><br><a href="${base}" target="_blank">${base}</a></p>
-          <p><b>Table 1:</b><br><a href="${table1}" target="_blank">${table1}</a></p>
-          <p><b>Table 2:</b><br><a href="${table2}" target="_blank">${table2}</a></p>
-          <p><img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(table1)}" /></p>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function ordersRows(orders, showRestaurant = true, showActions = true) {
-  return orders
-    .slice()
-    .reverse()
-    .map((o) => {
-      const date = o.createdAt ? new Date(o.createdAt).toLocaleString("ru-RU") : "-";
-
-      return `
-<tr>
-  <td>${o.orderId}</td>
-  ${showRestaurant ? `<td>${o.restaurant}</td>` : ""}
-  <td>${o.table || "—"}</td>
-  <td>${o.customer || "—"}</td>
-  <td>${o.phone || "—"}</td>
-  <td>${o.address || "—"}</td>
-  <td>${orderItemsText(o)}</td>
-  <td>${money(o.total)}</td>
-  <td>${paymentLabel(o)}</td>
-  <td><b>${o.status || "Yangi"}</b></td>
-  <td>${date}</td>
-  ${showActions ? `<td>${actionButtons(o)}</td>` : ""}
-</tr>
-`;
-    })
-    .join("");
-}
-
-function menuEditorHtml(restaurant) {
-  const rows = Object.entries(restaurant.menu)
-    .map(([key, item]) => {
-      return `
-<tr>
-  <td>${key}</td>
-  <td>
-    <form method="POST" action="/admin/${restaurant.id}/menu/update">
-      <input type="hidden" name="itemKey" value="${key}" />
-      <input name="name" value="${item.name}" />
-  </td>
-  <td>
-      <input name="price" value="${item.price}" type="number" />
-  </td>
-  <td>
-      <button class="green">Save</button>
-    </form>
-  </td>
-  <td>
-    <form method="POST" action="/admin/${restaurant.id}/menu/delete">
-      <input type="hidden" name="itemKey" value="${key}" />
-      <button class="red">Delete</button>
-    </form>
-  </td>
-</tr>
-`;
-    })
-    .join("");
-
-  return `
-<div class="panel">
-  <h2>🍽 Menu Editor</h2>
-
-  <h3>➕ Yangi mahsulot qo‘shish</h3>
-  <form method="POST" action="/admin/${restaurant.id}/menu/update" class="menu-form">
-    <input name="itemKey" placeholder="key masalan: double_burger" required />
-    <input name="name" placeholder="Nomi masalan: 🍔 Double Burger" required />
-    <input name="price" placeholder="Narxi" type="number" required />
-    <button class="blue">Add</button>
-  </form>
-
-  <h3>📋 Mavjud menu</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Key</th>
-        <th>Name</th>
-        <th>Price</th>
-        <th>Save</th>
-        <th>Delete</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
-</div>
-`;
-}
-
-function pageLayout(title, subtitle, bodyHtml) {
-  return `
+    const html = `
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
-<meta http-equiv="refresh" content="30">
-<title>${title}</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BotFlow AI Admin</title>
+
 <style>
-body{font-family:Arial;background:#f4f6f8;padding:20px;}
-h1{font-size:34px;margin-bottom:8px;}
-.subtitle{color:#6b7280;margin-bottom:20px;}
-.cards{display:flex;gap:15px;margin-bottom:20px;flex-wrap:wrap;}
-.card{background:white;padding:16px;border-radius:16px;min-width:180px;box-shadow:0 3px 10px #0001;}
-.card b{font-size:22px;}
-.panel{background:white;padding:16px;border-radius:16px;margin-bottom:20px;box-shadow:0 3px 10px #0001;}
-.qr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px;}
-.qr-card{background:white;padding:16px;border-radius:16px;box-shadow:0 3px 10px #0001;word-break:break-all;}
-table{width:100%;border-collapse:collapse;background:white;border-radius:14px;overflow:hidden;margin-top:10px;}
-th,td{border-bottom:1px solid #eee;padding:10px;text-align:left;vertical-align:top;}
-th{background:#111827;color:white;}
-button{border:none;color:white;padding:6px 10px;border-radius:8px;cursor:pointer;margin:2px;}
-input{padding:8px;border:1px solid #ddd;border-radius:8px;margin:3px;}
-.green{background:#16a34a;}
-.orange{background:#ea580c;}
-.blue{background:#2563eb;}
-.purple{background:#7c3aed;}
-.red{background:#dc2626;}
-.refresh{display:inline-block;background:#111827;color:white;padding:9px 13px;border-radius:10px;text-decoration:none;margin-bottom:15px;}
-a{color:#2563eb;}
-.menu-form{display:flex;gap:8px;flex-wrap:wrap;}
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+  font-family:Inter,Arial,sans-serif;
+}
+
+body{
+  background:#f3f5f9;
+  color:#111827;
+  padding:18px;
+}
+
+.header{
+  background:linear-gradient(135deg,#111827,#1e293b);
+  color:white;
+  padding:24px;
+  border-radius:30px;
+  margin-bottom:20px;
+  box-shadow:0 15px 35px rgba(15,23,42,.18);
+}
+
+.title{
+  font-size:32px;
+  font-weight:900;
+}
+
+.subtitle{
+  margin-top:8px;
+  color:#cbd5e1;
+  font-size:15px;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-bottom:22px;
+}
+
+.stat{
+  background:white;
+  border-radius:24px;
+  padding:18px;
+  box-shadow:0 10px 24px rgba(15,23,42,.08);
+}
+
+.statTitle{
+  color:#64748b;
+  font-size:14px;
+  font-weight:700;
+}
+
+.statValue{
+  margin-top:10px;
+  font-size:28px;
+  font-weight:900;
+}
+
+.ordersTitle{
+  font-size:24px;
+  font-weight:900;
+  margin-bottom:16px;
+}
+
+.orders{
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+
+.card{
+  background:white;
+  border-radius:28px;
+  padding:18px;
+  box-shadow:0 10px 28px rgba(15,23,42,.08);
+}
+
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+}
+
+.orderId{
+  font-size:20px;
+  font-weight:900;
+}
+
+.restaurant{
+  margin-top:4px;
+  color:#64748b;
+  font-weight:700;
+}
+
+.status{
+  padding:8px 14px;
+  border-radius:999px;
+  color:white;
+  font-size:13px;
+  font-weight:900;
+}
+
+.info{
+  margin-top:16px;
+  display:grid;
+  gap:10px;
+}
+
+.infoItem{
+  background:#f8fafc;
+  border-radius:18px;
+  padding:12px;
+}
+
+.label{
+  color:#64748b;
+  font-size:13px;
+  font-weight:700;
+}
+
+.value{
+  margin-top:4px;
+  font-size:15px;
+  font-weight:800;
+  word-break:break-word;
+}
+
+.items{
+  margin-top:14px;
+  background:#f8fafc;
+  border-radius:20px;
+  padding:14px;
+}
+
+.itemsTitle{
+  font-weight:900;
+  margin-bottom:10px;
+}
+
+.item{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:8px;
+  font-size:14px;
+}
+
+.total{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid #e5e7eb;
+  display:flex;
+  justify-content:space-between;
+  font-size:18px;
+  font-weight:900;
+}
+
+.actions{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.btn{
+  border:0;
+  border-radius:16px;
+  padding:14px;
+  color:white;
+  font-weight:900;
+  cursor:pointer;
+  font-size:14px;
+}
+
+.accept{background:#2563eb}
+.cooking{background:#f59e0b}
+.delivery{background:#8b5cf6}
+.done{background:#16a34a}
+.cancel{background:#ef4444}
+
+.mapBtn{
+  margin-top:14px;
+  width:100%;
+  border:0;
+  border-radius:18px;
+  padding:15px;
+  background:#111827;
+  color:white;
+  font-weight:900;
+  font-size:15px;
+}
+
+.empty{
+  background:white;
+  border-radius:24px;
+  padding:40px;
+  text-align:center;
+  color:#64748b;
+  font-weight:800;
+}
+
+.refresh{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  border:0;
+  background:#2563eb;
+  color:white;
+  font-size:26px;
+  font-weight:900;
+  box-shadow:0 12px 26px rgba(37,99,235,.35);
+  cursor:pointer;
+}
+
 </style>
 </head>
+
 <body>
-<h1>${title}</h1>
-<div class="subtitle">${subtitle}</div>
-<a class="refresh" href="">🔄 Refresh</a>
-${bodyHtml}
+
+<div class="header">
+  <div class="title">🚀 BotFlow AI Admin</div>
+  <div class="subtitle">
+    Live restaurant dashboard & order tracking
+  </div>
+</div>
+
+<div class="stats">
+
+  <div class="stat">
+    <div class="statTitle">💰 Umumiy revenue</div>
+    <div class="statValue">${money(totalRevenue)} so‘m</div>
+  </div>
+
+  <div class="stat">
+    <div class="statTitle">📦 Bugungi orderlar</div>
+    <div class="statValue">${todayOrders.length}</div>
+  </div>
+
+  <div class="stat">
+    <div class="statTitle">🚗 Aktiv orderlar</div>
+    <div class="statValue">${activeCount}</div>
+  </div>
+
+  <div class="stat">
+    <div class="statTitle">🎉 Yetkazilgan</div>
+    <div class="statValue">${deliveredCount}</div>
+  </div>
+
+</div>
+
+<div class="ordersTitle">
+  🛒 So‘nggi orderlar
+</div>
+
+<div class="orders">
+
+${orders.length === 0 ? `
+  <div class="empty">
+    Hozircha orderlar yo‘q
+  </div>
+` : orders.reverse().map(order => `
+
+<div class="card">
+
+  <div class="top">
+
+    <div>
+      <div class="orderId">${order.orderId}</div>
+      <div class="restaurant">${order.restaurant}</div>
+    </div>
+
+    <div 
+      class="status"
+      style="background:${getStatusColor(order.status)}"
+    >
+      ${order.status}
+    </div>
+
+  </div>
+
+  <div class="info">
+
+    <div class="infoItem">
+      <div class="label">👤 Mijoz</div>
+      <div class="value">${order.customer || "-"}</div>
+    </div>
+
+    <div class="infoItem">
+      <div class="label">📞 Telefon</div>
+      <div class="value">${order.phone || "-"}</div>
+    </div>
+
+    <div class="infoItem">
+      <div class="label">📍 Manzil</div>
+      <div class="value">${order.address || "-"}</div>
+    </div>
+
+    <div class="infoItem">
+      <div class="label">💳 To‘lov</div>
+      <div class="value">${order.paymentName || "-"}</div>
+    </div>
+
+  </div>
+
+  <div class="items">
+
+    <div class="itemsTitle">
+      🍔 Mahsulotlar
+    </div>
+
+    ${(order.items || []).map(item => `
+      <div class="item">
+        <span>${item.name}</span>
+        <span>${money(item.price)} so‘m</span>
+      </div>
+    `).join("")}
+
+    <div class="total">
+      <span>Jami</span>
+      <span>${money(order.total)} so‘m</span>
+    </div>
+
+  </div>
+
+  ${order.location ? `
+    <a
+      href="https://maps.google.com/?q=${order.location.latitude},${order.location.longitude}"
+      target="_blank"
+    >
+      <button class="mapBtn">
+        🗺 Google Maps ochish
+      </button>
+    </a>
+  ` : ""}
+
+  <div class="actions">
+
+    <button class="btn accept">✅ Qabul</button>
+
+    <button class="btn cooking">👨‍🍳 Tayyorlanmoqda</button>
+
+    <button class="btn delivery">🚗 Yo‘lda</button>
+
+    <button class="btn done">🎉 Yetkazildi</button>
+
+  </div>
+
+  <div class="actions">
+    <button class="btn cancel">❌ Bekor qilish</button>
+  </div>
+
+</div>
+
+`).join("")}
+
+</div>
+
+<button class="refresh" onclick="location.reload()">
+↻
+</button>
+
 </body>
 </html>
 `;
-}
 
-function adminRoutes(app, bot) {
-  app.get("/admin", async (req, res) => {
-    const orders = await getOrders();
-    const menus = await getMenus();
-    const a = analytics(orders);
+    res.send(html);
 
-    const body = `
-<div class="cards">
-  <div class="card">🛒 Orders<br><br><b>${orders.length}</b></div>
-  <div class="card">🟡 Active<br><br><b>${a.active}</b></div>
-  <div class="card">🎉 Delivered<br><br><b>${a.delivered}</b></div>
-  <div class="card">❌ Cancelled<br><br><b>${a.cancelled}</b></div>
-  <div class="card">💰 Revenue<br><br><b>${money(a.revenue)}</b></div>
-</div>
-
-<div class="panel">
-  <h2>🔗 QR Menu Links</h2>
-  <div class="qr-grid">${restaurantLinksHtml(menus)}</div>
-</div>
-
-<table>
-<thead>
-<tr>
-<th>ID</th><th>Restaurant</th><th>Table</th><th>Customer</th><th>Phone</th>
-<th>Address</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th>Actions</th>
-</tr>
-</thead>
-<tbody>${ordersRows(orders, true, true)}</tbody>
-</table>
-`;
-
-    res.send(pageLayout("🚀 BotFlow Admin Panel", "Menu Editor + QR + Multi Restaurant SaaS", body));
   });
 
-  app.get("/admin/:restaurantId", async (req, res) => {
-    const restaurantId = req.params.restaurantId;
-    const menus = await getMenus();
-    const restaurant = menus[restaurantId];
-
-    if (!restaurant) {
-      return res.send(pageLayout("Restaurant not found", "Bunday restoran topilmadi", ""));
-    }
-
-    const allOrders = await getOrders();
-    const orders = allOrders.filter((o) => o.restaurantId === restaurantId);
-    const a = analytics(orders);
-
-    const body = `
-<div class="cards">
-  <div class="card">🛒 Orders<br><br><b>${orders.length}</b></div>
-  <div class="card">🟡 Active<br><br><b>${a.active}</b></div>
-  <div class="card">🎉 Delivered<br><br><b>${a.delivered}</b></div>
-  <div class="card">❌ Cancelled<br><br><b>${a.cancelled}</b></div>
-  <div class="card">💰 Revenue<br><br><b>${money(a.revenue)}</b></div>
-</div>
-
-${menuEditorHtml(restaurant)}
-
-<table>
-<thead>
-<tr>
-<th>ID</th><th>Table</th><th>Customer</th><th>Phone</th><th>Address</th>
-<th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th>Actions</th>
-</tr>
-</thead>
-<tbody>${ordersRows(orders, false, true)}</tbody>
-</table>
-`;
-
-    res.send(pageLayout(`${restaurant.name} Owner Panel`, "Restaurant owner dashboard + menu editor", body));
-  });
-
-  app.post("/admin/:restaurantId/menu/update", async (req, res) => {
-    const { restaurantId } = req.params;
-    const { itemKey, name, price } = req.body;
-
-    await updateMenuItem(restaurantId, itemKey, name, price);
-
-    res.redirect(`/admin/${restaurantId}`);
-  });
-
-  app.post("/admin/:restaurantId/menu/delete", async (req, res) => {
-    const { restaurantId } = req.params;
-    const { itemKey } = req.body;
-
-    await deleteMenuItem(restaurantId, itemKey);
-
-    res.redirect(`/admin/${restaurantId}`);
-  });
-
-  app.post("/admin/status", async (req, res) => {
-    const { orderId, status } = req.body;
-    const order = await updateOrderStatus(orderId, status);
-
-    if (order && order.chatId) {
-      await bot.sendMessage(order.chatId, `📌 Buyurtma holati:\n\n${order.status}`);
-    }
-
-    res.redirect(req.headers.referer || "/admin");
-  });
 }
 
 module.exports = { adminRoutes };
