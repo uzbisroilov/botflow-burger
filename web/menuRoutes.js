@@ -69,216 +69,313 @@ function menuRoutes(app) {
 <title>BotFlow AI Menu</title>
 
 <style>
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
 :root{
-  --bg:#f6f7fb;
-  --dark:#0f172a;
-  --muted:#64748b;
+  --bg:#f3f5f8;
+  --dark:#101827;
+  --dark2:#182231;
+  --muted:#6b7280;
+  --soft:#eef2f7;
   --card:#ffffff;
-  --green:#16a34a;
+  --green:#18a957;
+  --green2:#22c55e;
   --blue:#2563eb;
-  --orange:#f97316;
+  --orange:#ff7a1a;
   --red:#ef4444;
+  --shadow:0 16px 36px rgba(15,23,42,.12);
 }
+
 body{
   margin:0;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
   background:var(--bg);
   color:var(--dark);
-  padding-bottom:128px;
+  padding-bottom:132px;
 }
+
 .hero{
-  padding:20px 16px 24px;
   background:linear-gradient(145deg,#0f172a,#1e293b);
   color:white;
-  border-bottom-left-radius:28px;
-  border-bottom-right-radius:28px;
+  padding:20px 16px 28px;
+  border-bottom-left-radius:32px;
+  border-bottom-right-radius:32px;
+  position:relative;
+  overflow:hidden;
 }
+
+.hero:after{
+  content:"";
+  position:absolute;
+  width:180px;
+  height:180px;
+  border-radius:50%;
+  background:rgba(255,255,255,.06);
+  right:-60px;
+  top:-70px;
+}
+
 .heroTop{
   display:flex;
   justify-content:space-between;
   align-items:center;
+  position:relative;
+  z-index:2;
 }
+
 .logo{
-  font-size:25px;
-  font-weight:900;
+  font-size:26px;
+  font-weight:950;
+  letter-spacing:-.5px;
 }
+
 .badge{
-  background:rgba(255,255,255,.12);
+  background:rgba(255,255,255,.13);
+  border:1px solid rgba(255,255,255,.16);
   padding:8px 12px;
   border-radius:999px;
   font-size:13px;
-  font-weight:800;
+  font-weight:900;
 }
+
 .heroTitle{
   margin-top:18px;
-  font-size:28px;
-  line-height:1.1;
+  font-size:30px;
+  line-height:1.08;
   font-weight:950;
+  letter-spacing:-.8px;
+  position:relative;
+  z-index:2;
 }
+
 .heroText{
   margin-top:8px;
-  color:#cbd5e1;
+  color:#d1d5db;
   font-size:15px;
-}
-.promo{
-  margin-top:16px;
-  padding:14px;
-  border-radius:20px;
-  background:linear-gradient(135deg,#f97316,#ef4444);
-  box-shadow:0 10px 24px rgba(239,68,68,.28);
-}
-.promo b{
-  font-size:18px;
-}
-.promo p{
-  margin:5px 0 0;
-  font-size:13px;
-  opacity:.95;
-}
-.searchWrap{
-  margin:-18px 16px 8px;
+  line-height:1.45;
   position:relative;
-  z-index:3;
+  z-index:2;
 }
+
+.promo{
+  margin-top:18px;
+  padding:16px;
+  border-radius:24px;
+  background:linear-gradient(135deg,#ff8a1f,#ef4444);
+  box-shadow:0 14px 28px rgba(239,68,68,.28);
+  position:relative;
+  z-index:2;
+}
+
+.promo b{
+  font-size:19px;
+}
+
+.promo p{
+  margin:6px 0 0;
+  font-size:13px;
+  opacity:.96;
+  line-height:1.35;
+}
+
+.searchWrap{
+  margin:-20px 16px 8px;
+  position:relative;
+  z-index:4;
+}
+
 .searchWrap input{
   width:100%;
   border:0;
   outline:none;
   background:white;
-  border-radius:18px;
-  padding:15px 16px;
+  border-radius:20px;
+  padding:16px 18px;
   font-size:15px;
-  box-shadow:0 10px 28px rgba(15,23,42,.12);
+  font-weight:700;
+  box-shadow:0 14px 32px rgba(15,23,42,.14);
 }
+
 .tabs{
   display:flex;
   gap:10px;
   overflow-x:auto;
-  padding:12px 16px 8px;
+  padding:14px 16px 8px;
 }
+
 .tabs::-webkit-scrollbar{display:none}
+
 .tab{
   border:0;
   background:white;
   color:#111827;
   border-radius:999px;
-  padding:11px 16px;
+  padding:12px 18px;
   font-size:14px;
-  font-weight:900;
+  font-weight:950;
   white-space:nowrap;
-  box-shadow:0 6px 16px rgba(15,23,42,.07);
+  box-shadow:0 8px 18px rgba(15,23,42,.08);
 }
+
 .tab.active{
   background:#111827;
   color:white;
+  box-shadow:0 12px 24px rgba(15,23,42,.2);
 }
+
 .sectionHead{
-  padding:12px 16px 4px;
-  display:flex;
-  align-items:end;
-  justify-content:space-between;
+  padding:12px 18px 4px;
 }
+
 .sectionTitle{
-  font-size:23px;
+  font-size:28px;
   font-weight:950;
+  letter-spacing:-.7px;
 }
+
 .sectionSub{
+  margin-top:3px;
   color:var(--muted);
-  font-size:13px;
-  font-weight:700;
+  font-size:14px;
+  font-weight:800;
 }
+
 .grid{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:14px;
-  padding:12px 16px;
+  gap:18px;
+  padding:14px 16px 20px;
 }
+
 .card{
   background:white;
-  border-radius:24px;
+  border-radius:30px;
   overflow:hidden;
-  box-shadow:0 8px 24px rgba(15,23,42,.08);
+  box-shadow:var(--shadow);
   position:relative;
+  min-width:0;
 }
-.card img{
+
+.imageWrap{
   width:100%;
-  height:132px;
+  height:168px;
+  overflow:hidden;
+  background:#e5e7eb;
+}
+
+.imageWrap img{
+  width:100%;
+  height:100%;
   object-fit:cover;
   display:block;
 }
+
 .cardTag{
   position:absolute;
-  top:10px;
-  left:10px;
-  background:rgba(15,23,42,.82);
+  top:12px;
+  left:12px;
+  background:rgba(15,23,42,.86);
   color:white;
-  padding:5px 8px;
+  padding:6px 10px;
   border-radius:999px;
   font-size:11px;
-  font-weight:900;
+  font-weight:950;
+  z-index:2;
+  backdrop-filter:blur(8px);
 }
+
 .cardBody{
-  padding:12px;
+  padding:14px;
 }
+
 .itemName{
-  font-size:15px;
-  font-weight:900;
-  min-height:40px;
+  font-size:18px;
+  line-height:1.18;
+  font-weight:950;
+  min-height:44px;
+  letter-spacing:-.3px;
 }
+
 .itemDesc{
   color:var(--muted);
-  font-size:12px;
-  margin-top:4px;
-  min-height:28px;
-}
-.price{
+  font-size:13px;
+  line-height:1.25;
   margin-top:8px;
-  font-size:17px;
-  font-weight:950;
+  min-height:34px;
 }
+
+.price{
+  margin-top:10px;
+  font-size:20px;
+  font-weight:950;
+  letter-spacing:-.4px;
+}
+
 .controls{
-  margin-top:11px;
+  margin-top:14px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.addBtn{
+  width:100%;
+  border:0;
+  border-radius:18px;
+  background:linear-gradient(135deg,var(--green),var(--green2));
+  color:white;
+  padding:14px 10px;
+  font-size:16px;
+  font-weight:950;
+  box-shadow:0 12px 22px rgba(34,197,94,.25);
+}
+
+.addBtn:active{
+  transform:scale(.98);
+}
+
+.qty{
+  width:100%;
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:8px;
+  justify-content:center;
+  gap:14px;
+  background:#f1f5f9;
+  border-radius:18px;
+  padding:10px;
 }
-.addBtn{
-  flex:1;
+
+.qty button{
+  width:40px;
+  height:40px;
   border:0;
   border-radius:14px;
-  background:var(--green);
-  color:white;
-  padding:11px 8px;
-  font-weight:950;
-}
-.qty{
-  display:flex;
-  align-items:center;
-  gap:7px;
-}
-.qty button{
-  width:31px;
-  height:31px;
-  border:0;
-  border-radius:50%;
   background:#111827;
   color:white;
-  font-size:18px;
+  font-size:24px;
   font-weight:950;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1;
 }
+
 .qty span{
-  min-width:18px;
+  min-width:28px;
   text-align:center;
+  font-size:19px;
   font-weight:950;
+  color:#111827;
 }
+
 .empty{
   grid-column:1/3;
   text-align:center;
-  padding:44px 10px;
+  padding:46px 10px;
   color:var(--muted);
+  font-weight:800;
 }
+
 .cart{
   position:fixed;
   left:0;
@@ -286,34 +383,42 @@ body{
   bottom:0;
   z-index:20;
   background:white;
-  padding:14px 16px;
-  border-top-left-radius:26px;
-  border-top-right-radius:26px;
-  box-shadow:0 -10px 28px rgba(15,23,42,.16);
+  padding:16px 18px 18px;
+  border-top-left-radius:30px;
+  border-top-right-radius:30px;
+  box-shadow:0 -16px 36px rgba(15,23,42,.18);
 }
+
 .cartRow{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  margin-bottom:10px;
+  margin-bottom:12px;
 }
+
 .cartCount{
+  font-size:18px;
   font-weight:950;
 }
+
 .cartTotal{
+  font-size:18px;
   font-weight:950;
-  color:#16a34a;
+  color:var(--green);
 }
+
 .orderBtn{
   width:100%;
   border:0;
-  border-radius:18px;
+  border-radius:20px;
   background:linear-gradient(135deg,#2563eb,#1d4ed8);
   color:white;
-  padding:16px;
-  font-size:17px;
+  padding:17px;
+  font-size:18px;
   font-weight:950;
+  box-shadow:0 12px 26px rgba(37,99,235,.28);
 }
+
 .checkoutOverlay{
   position:fixed;
   inset:0;
@@ -322,75 +427,90 @@ body{
   align-items:flex-end;
   z-index:50;
 }
+
 .checkout{
   width:100%;
   background:white;
-  border-top-left-radius:30px;
-  border-top-right-radius:30px;
-  padding:20px;
+  border-top-left-radius:32px;
+  border-top-right-radius:32px;
+  padding:22px;
   max-height:92vh;
   overflow:auto;
 }
+
 .checkout h2{
-  margin:0 0 14px;
-  font-size:23px;
+  margin:0 0 16px;
+  font-size:25px;
+  font-weight:950;
 }
-.field{margin-bottom:13px}
+
+.field{
+  margin-bottom:14px;
+}
+
 .field label{
   display:block;
-  font-weight:900;
-  margin-bottom:7px;
+  font-weight:950;
+  margin-bottom:8px;
 }
+
 .field input,.field textarea,.field select{
   width:100%;
   border:1px solid #e5e7eb;
   background:#f8fafc;
-  border-radius:16px;
-  padding:14px;
-  font-size:15px;
+  border-radius:18px;
+  padding:15px;
+  font-size:16px;
   outline:none;
 }
+
 .field textarea{
-  min-height:80px;
+  min-height:84px;
   resize:none;
 }
+
 .locationBtn{
   width:100%;
   border:0;
-  border-radius:16px;
+  border-radius:18px;
   background:#111827;
   color:white;
-  padding:14px;
+  padding:15px;
   font-weight:950;
   margin-bottom:10px;
 }
+
 .locationInfo{
-  color:#16a34a;
+  color:var(--green);
   font-size:13px;
-  font-weight:800;
+  font-weight:900;
   margin-bottom:12px;
 }
+
 .checkoutActions{
   display:flex;
-  gap:10px;
+  gap:12px;
 }
+
 .cancelBtn{
   flex:1;
   border:0;
-  border-radius:16px;
+  border-radius:18px;
   background:#e5e7eb;
-  padding:15px;
+  padding:16px;
   font-weight:950;
 }
+
 .submitBtn{
   flex:2;
   border:0;
-  border-radius:16px;
-  background:#16a34a;
+  border-radius:18px;
+  background:linear-gradient(135deg,var(--green),var(--green2));
   color:white;
-  padding:15px;
+  padding:16px;
   font-weight:950;
 }
+
 .mapOverlay{
   position:fixed;
   inset:0;
@@ -398,8 +518,9 @@ body{
   display:none;
   z-index:100;
 }
+
 .mapHeader{
-  height:60px;
+  height:62px;
   background:#111827;
   color:white;
   display:flex;
@@ -409,40 +530,56 @@ body{
   font-weight:950;
   font-size:18px;
 }
+
 .mapHeader button{
   border:0;
   background:transparent;
   color:white;
-  font-size:26px;
+  font-size:28px;
 }
+
 #map{
-  height:calc(100vh - 184px);
+  height:calc(100vh - 188px);
   width:100%;
 }
+
 .mapBottom{
-  height:124px;
+  height:126px;
   padding:12px;
   background:white;
-  box-shadow:0 -8px 22px rgba(15,23,42,.18);
+  box-shadow:0 -10px 24px rgba(15,23,42,.18);
 }
+
 .mapHint{
-  font-weight:900;
+  font-weight:950;
   margin-bottom:10px;
 }
+
 .mapActions{
   display:flex;
   gap:10px;
 }
+
 .gpsBtn,.confirmMapBtn{
   flex:1;
   border:0;
-  border-radius:16px;
-  padding:15px;
+  border-radius:18px;
+  padding:16px;
   color:white;
   font-weight:950;
 }
+
 .gpsBtn{background:#111827}
-.confirmMapBtn{background:#16a34a}
+.confirmMapBtn{background:linear-gradient(135deg,var(--green),var(--green2))}
+
+@media(max-width:390px){
+  .grid{gap:14px;padding:12px}
+  .imageWrap{height:145px}
+  .itemName{font-size:16px}
+  .price{font-size:18px}
+  .addBtn{font-size:15px;padding:13px 8px}
+  .qty button{width:36px;height:36px}
+}
 </style>
 </head>
 
@@ -467,10 +604,8 @@ body{
 <div class="tabs" id="tabs"></div>
 
 <div class="sectionHead">
-  <div>
-    <div class="sectionTitle" id="sectionTitle">Menu</div>
-    <div class="sectionSub">Eng ko‘p buyurtma qilinadigan mahsulotlar</div>
-  </div>
+  <div class="sectionTitle" id="sectionTitle">Menu</div>
+  <div class="sectionSub">Eng ko‘p buyurtma qilinadigan mahsulotlar</div>
 </div>
 
 <div class="grid" id="grid"></div>
@@ -554,7 +689,9 @@ const images = {
   cheesecake:"https://images.pexels.com/photos/291528/pexels-photo-291528.jpeg"
 };
 
-function money(n){return Number(n||0).toLocaleString("ru-RU")+" UZS";}
+function money(n){
+  return Number(n||0).toLocaleString("ru-RU")+" UZS";
+}
 
 function renderTabs(){
   const tabs=document.getElementById("tabs");
@@ -580,6 +717,7 @@ function renderMenu(){
   grid.innerHTML="";
 
   const restaurant=menus[currentRestaurant];
+
   if(!restaurant){
     grid.innerHTML='<div class="empty">Menu topilmadi</div>';
     return;
@@ -602,7 +740,9 @@ function renderMenu(){
     card.className="card";
     card.innerHTML=\`
       <div class="cardTag">TOP</div>
-      <img src="\${images[key]||images.burger}"/>
+      <div class="imageWrap">
+        <img src="\${images[key]||images.burger}"/>
+      </div>
       <div class="cardBody">
         <div class="itemName">\${item.name||"Mahsulot"}</div>
         <div class="itemDesc">Yangi tayyorlanadi • tez yetkaziladi</div>
@@ -623,61 +763,105 @@ function renderMenu(){
 
 function addToCart(key){
   const item=menus[currentRestaurant].menu[key];
-  cart.push({key,restaurantId:currentRestaurant,name:item.name,price:Number(item.price||0)});
-  renderCart();renderMenu();
+  cart.push({
+    key,
+    restaurantId:currentRestaurant,
+    name:item.name,
+    price:Number(item.price||0)
+  });
+  renderCart();
+  renderMenu();
 }
 
 function removeFromCart(key){
   const index=cart.findIndex(i=>i.key===key&&i.restaurantId===currentRestaurant);
   if(index>=0)cart.splice(index,1);
-  renderCart();renderMenu();
+  renderCart();
+  renderMenu();
 }
 
 function renderCart(){
   const total=cart.reduce((s,i)=>s+Number(i.price||0),0);
-  document.getElementById("cartCount").innerText=cart.length?"🛒 "+cart.length+" ta mahsulot":"🛒 Savat bo‘sh";
+  document.getElementById("cartCount").innerText=
+    cart.length ? "🛒 "+cart.length+" ta mahsulot" : "🛒 Savat bo‘sh";
   document.getElementById("cartTotal").innerText=money(total);
 }
 
 function autoDetectLocation(){
   if(!navigator.geolocation)return;
+
   document.getElementById("locationInfo").innerText="🎯 Lokatsiya aniqlanmoqda...";
+
   navigator.geolocation.getCurrentPosition(
     pos=>{
-      userLocation={latitude:pos.coords.latitude,longitude:pos.coords.longitude};
-      selectedLatLng={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      userLocation={
+        latitude:pos.coords.latitude,
+        longitude:pos.coords.longitude
+      };
+
+      selectedLatLng={
+        lat:pos.coords.latitude,
+        lng:pos.coords.longitude
+      };
+
       document.getElementById("locationInfo").innerText="✅ Lokatsiya aniqlandi";
       document.getElementById("address").value="📍 GPS orqali aniqlandi";
+
       if(map&&marker){
         marker.setLatLng([selectedLatLng.lat,selectedLatLng.lng]);
         map.setView([selectedLatLng.lat,selectedLatLng.lng],17);
       }
     },
-    ()=>{document.getElementById("locationInfo").innerText="GPS ishlamadi, xaritadan tanlang";},
+    ()=>{
+      document.getElementById("locationInfo").innerText="GPS ishlamadi, xaritadan tanlang";
+    },
     {enableHighAccuracy:true,timeout:12000,maximumAge:0}
   );
 }
 
 function openCheckout(){
-  if(!cart.length){alert("Savat bo‘sh");return;}
+  if(!cart.length){
+    alert("Savat bo‘sh");
+    return;
+  }
+
   document.getElementById("checkoutOverlay").style.display="flex";
   setTimeout(autoDetectLocation,500);
 }
 
-function closeCheckout(){document.getElementById("checkoutOverlay").style.display="none";}
+function closeCheckout(){
+  document.getElementById("checkoutOverlay").style.display="none";
+}
 
 function openMapPicker(){
   document.getElementById("mapOverlay").style.display="block";
+
   setTimeout(()=>{
     if(!map){
       map=L.map("map").setView(defaultCenter,14);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+        maxZoom:19,
+        attribution:"© OpenStreetMap"
+      }).addTo(map);
+
       marker=L.marker(defaultCenter,{draggable:true}).addTo(map);
       selectedLatLng={lat:defaultCenter[0],lng:defaultCenter[1]};
-      map.on("click",e=>{selectedLatLng=e.latlng;marker.setLatLng(e.latlng);document.getElementById("mapHint").innerText="✅ Lokatsiya tanlandi";});
-      marker.on("dragend",()=>{selectedLatLng=marker.getLatLng();document.getElementById("mapHint").innerText="✅ Lokatsiya tanlandi";});
+
+      map.on("click",e=>{
+        selectedLatLng=e.latlng;
+        marker.setLatLng(e.latlng);
+        document.getElementById("mapHint").innerText="✅ Lokatsiya tanlandi";
+      });
+
+      marker.on("dragend",()=>{
+        selectedLatLng=marker.getLatLng();
+        document.getElementById("mapHint").innerText="✅ Lokatsiya tanlandi";
+      });
     }
+
     map.invalidateSize();
+
     if(selectedLatLng){
       map.setView([selectedLatLng.lat,selectedLatLng.lng],16);
       marker.setLatLng([selectedLatLng.lat,selectedLatLng.lng]);
@@ -685,10 +869,13 @@ function openMapPicker(){
   },300);
 }
 
-function closeMapPicker(){document.getElementById("mapOverlay").style.display="none";}
+function closeMapPicker(){
+  document.getElementById("mapOverlay").style.display="none";
+}
 
 function useGPS(){
   autoDetectLocation();
+
   setTimeout(()=>{
     if(selectedLatLng&&map&&marker){
       marker.setLatLng([selectedLatLng.lat,selectedLatLng.lng]);
@@ -699,26 +886,55 @@ function useGPS(){
 }
 
 function confirmMapLocation(){
-  if(!selectedLatLng){alert("Xaritadan joy tanlang");return;}
-  userLocation={latitude:selectedLatLng.lat,longitude:selectedLatLng.lng};
+  if(!selectedLatLng){
+    alert("Xaritadan joy tanlang");
+    return;
+  }
+
+  userLocation={
+    latitude:selectedLatLng.lat,
+    longitude:selectedLatLng.lng
+  };
+
   document.getElementById("locationInfo").innerText="✅ Lokatsiya tanlandi";
   document.getElementById("address").value="🗺 Xaritadan lokatsiya tanlandi";
   closeMapPicker();
 }
 
 function sendOrder(){
-  if(!cart.length){alert("Savat bo‘sh");return;}
+  if(!cart.length){
+    alert("Savat bo‘sh");
+    return;
+  }
+
   const phone=document.getElementById("phone").value.trim();
   const address=document.getElementById("address").value.trim();
   const paymentType=document.getElementById("payment").value;
-  if(!phone){alert("Telefon raqam kiriting");return;}
-  if(!address&&!userLocation){alert("Manzil kiriting yoki xaritadan lokatsiya tanlang");return;}
+
+  if(!phone){
+    alert("Telefon raqam kiriting");
+    return;
+  }
+
+  if(!address&&!userLocation){
+    alert("Manzil kiriting yoki xaritadan lokatsiya tanlang");
+    return;
+  }
 
   const restaurantId=cart[0].restaurantId;
   const items=cart.filter(i=>i.restaurantId===restaurantId);
   const total=items.reduce((s,i)=>s+Number(i.price||0),0);
 
-  const payload={type:"web_order_full",restaurantId,items,total,phone,address:address||"Xaritadan lokatsiya tanlandi",paymentType,location:userLocation};
+  const payload={
+    type:"web_order_full",
+    restaurantId,
+    items,
+    total,
+    phone,
+    address:address||"Xaritadan lokatsiya tanlandi",
+    paymentType,
+    location:userLocation
+  };
 
   if(window.Telegram&&Telegram.WebApp){
     Telegram.WebApp.sendData(JSON.stringify(payload));
@@ -728,7 +944,9 @@ function sendOrder(){
   }
 }
 
-renderTabs();renderMenu();renderCart();
+renderTabs();
+renderMenu();
+renderCart();
 
 if(window.Telegram&&Telegram.WebApp){
   Telegram.WebApp.ready();
