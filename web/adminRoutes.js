@@ -1,6 +1,24 @@
 const { getOrders, updateOrderStatus } = require("../services/orderService");
 const { getMenus, updateMenuItem, deleteMenuItem } = require("../services/menuService");
 
+const ADMIN_PASS = process.env.ADMIN_PASS || "12345";
+
+function checkPass(req, res) {
+  if (req.query.pass !== ADMIN_PASS) {
+    res.send(`
+      <h1>🔒 Access denied</h1>
+      <p>Parol noto‘g‘ri.</p>
+      <p>Masalan: /admin?pass=12345</p>
+    `);
+    return false;
+  }
+  return true;
+}
+
+function passQuery(req) {
+  return `?pass=${req.query.pass || ""}`;
+}
+
 function money(n) {
   return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so‘m";
 }
@@ -24,9 +42,9 @@ function orderItemsText(order) {
     .join("<br>");
 }
 
-function button(orderId, status, label, color) {
+function button(orderId, status, label, color, pass) {
   return `
-    <form method="POST" action="/admin/status" style="display:inline">
+    <form method="POST" action="/admin/status?pass=${pass}" style="display:inline">
       <input type="hidden" name="orderId" value="${orderId}" />
       <input type="hidden" name="status" value="${status}" />
       <button class="${color}">${label}</button>
@@ -34,17 +52,17 @@ function button(orderId, status, label, color) {
   `;
 }
 
-function actionButtons(order) {
+function actionButtons(order, pass) {
   if (isClosed(order.status)) {
     return `<b style="color:#6b7280;">Yakunlangan</b>`;
   }
 
   return `
-    ${button(order.orderId, "✅ Qabul qilindi", "Qabul", "green")}
-    ${button(order.orderId, "👨‍🍳 Tayyorlanmoqda", "Tayyor", "orange")}
-    ${button(order.orderId, "🚗 Yo‘lda", "Yo‘lda", "blue")}
-    ${button(order.orderId, "🎉 Yetkazildi", "Yetkazildi", "purple")}
-    ${button(order.orderId, "❌ Bekor qilindi", "Bekor", "red")}
+    ${button(order.orderId, "✅ Qabul qilindi", "Qabul", "green", pass)}
+    ${button(order.orderId, "👨‍🍳 Tayyorlanmoqda", "Tayyor", "orange", pass)}
+    ${button(order.orderId, "🚗 Yo‘lda", "Yo‘lda", "blue", pass)}
+    ${button(order.orderId, "🎉 Yetkazildi", "Yetkazildi", "purple", pass)}
+    ${button(order.orderId, "❌ Bekor qilindi", "Bekor", "red", pass)}
   `;
 }
 
@@ -57,7 +75,7 @@ function analytics(orders) {
   return { revenue, delivered, cancelled, active };
 }
 
-function ordersRows(orders, showRestaurant = true, showActions = true) {
+function ordersRows(orders, pass, showRestaurant = true, showActions = true) {
   return orders
     .slice()
     .reverse()
@@ -77,21 +95,21 @@ function ordersRows(orders, showRestaurant = true, showActions = true) {
   <td>${paymentLabel(o)}</td>
   <td><b>${o.status || "🆕 Yangi"}</b></td>
   <td>${date}</td>
-  ${showActions ? `<td>${actionButtons(o)}</td>` : ""}
+  ${showActions ? `<td>${actionButtons(o, pass)}</td>` : ""}
 </tr>
 `;
     })
     .join("");
 }
 
-function menuEditorHtml(restaurant) {
+function menuEditorHtml(restaurant, pass) {
   const rows = Object.entries(restaurant.menu || {})
     .map(([key, item]) => {
       return `
 <tr>
   <td>${key}</td>
   <td>
-    <form method="POST" action="/admin/${restaurant.id}/menu/update">
+    <form method="POST" action="/admin/${restaurant.id}/menu/update?pass=${pass}">
       <input type="hidden" name="itemKey" value="${key}" />
       <input name="name" value="${item.name}" />
   </td>
@@ -103,7 +121,7 @@ function menuEditorHtml(restaurant) {
     </form>
   </td>
   <td>
-    <form method="POST" action="/admin/${restaurant.id}/menu/delete">
+    <form method="POST" action="/admin/${restaurant.id}/menu/delete?pass=${pass}">
       <input type="hidden" name="itemKey" value="${key}" />
       <button class="red">Delete</button>
     </form>
@@ -117,7 +135,7 @@ function menuEditorHtml(restaurant) {
 <div class="panel">
   <h2>🍽 Menu Editor</h2>
 
-  <form method="POST" action="/admin/${restaurant.id}/menu/update" class="menu-form">
+  <form method="POST" action="/admin/${restaurant.id}/menu/update?pass=${pass}" class="menu-form">
     <input name="itemKey" placeholder="key: double_burger" required />
     <input name="name" placeholder="Nomi: 🍔 Double Burger" required />
     <input name="price" placeholder="Narxi" type="number" required />
@@ -184,6 +202,9 @@ ${bodyHtml}
 
 function adminRoutes(app, bot) {
   app.get("/admin", async (req, res) => {
+    if (!checkPass(req, res)) return;
+
+    const pass = req.query.pass;
     const orders = await getOrders();
     const a = analytics(orders);
 
@@ -197,8 +218,11 @@ function adminRoutes(app, bot) {
 </div>
 
 <p>
-  <a href="/kitchen">👨‍🍳 Kitchen Screen</a> |
-  <a href="/menu">📱 Web App Menu</a>
+  <a href="/kitchen?pass=${pass}">👨‍🍳 Kitchen Screen</a> |
+  <a href="/menu">📱 Web App Menu</a> |
+  <a href="/admin/burger?pass=${pass}">🍔 Burger panel</a> |
+  <a href="/admin/sushi?pass=${pass}">🍣 Sushi panel</a> |
+  <a href="/admin/coffee?pass=${pass}">☕ Coffee panel</a>
 </p>
 
 <table>
@@ -208,7 +232,7 @@ function adminRoutes(app, bot) {
 <th>Address</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th>Actions</th>
 </tr>
 </thead>
-<tbody>${ordersRows(orders, true, true)}</tbody>
+<tbody>${ordersRows(orders, pass, true, true)}</tbody>
 </table>
 `;
 
@@ -216,6 +240,9 @@ function adminRoutes(app, bot) {
   });
 
   app.get("/admin/:restaurantId", async (req, res) => {
+    if (!checkPass(req, res)) return;
+
+    const pass = req.query.pass;
     const restaurantId = req.params.restaurantId;
     const menus = await getMenus();
     const restaurant = menus[restaurantId];
@@ -237,7 +264,7 @@ function adminRoutes(app, bot) {
   <div class="card">💰 Revenue<br><br><b>${money(a.revenue)}</b></div>
 </div>
 
-${menuEditorHtml(restaurant)}
+${menuEditorHtml(restaurant, pass)}
 
 <table>
 <thead>
@@ -246,7 +273,7 @@ ${menuEditorHtml(restaurant)}
 <th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Date</th><th>Actions</th>
 </tr>
 </thead>
-<tbody>${ordersRows(orders, false, true)}</tbody>
+<tbody>${ordersRows(orders, pass, false, true)}</tbody>
 </table>
 `;
 
@@ -254,6 +281,8 @@ ${menuEditorHtml(restaurant)}
   });
 
   app.get("/kitchen", async (req, res) => {
+    if (!checkPass(req, res)) return;
+
     const orders = await getOrders();
 
     const activeOrders = orders
@@ -327,22 +356,28 @@ ${
   });
 
   app.post("/admin/:restaurantId/menu/update", async (req, res) => {
+    if (!checkPass(req, res)) return;
+
     const { restaurantId } = req.params;
     const { itemKey, name, price } = req.body;
 
     await updateMenuItem(restaurantId, itemKey, name, price);
-    res.redirect(`/admin/${restaurantId}`);
+    res.redirect(`/admin/${restaurantId}?pass=${req.query.pass}`);
   });
 
   app.post("/admin/:restaurantId/menu/delete", async (req, res) => {
+    if (!checkPass(req, res)) return;
+
     const { restaurantId } = req.params;
     const { itemKey } = req.body;
 
     await deleteMenuItem(restaurantId, itemKey);
-    res.redirect(`/admin/${restaurantId}`);
+    res.redirect(`/admin/${restaurantId}?pass=${req.query.pass}`);
   });
 
   app.post("/admin/status", async (req, res) => {
+    if (!checkPass(req, res)) return;
+
     const { orderId, status } = req.body;
     const order = await updateOrderStatus(orderId, status);
 
@@ -350,7 +385,7 @@ ${
       await bot.sendMessage(order.chatId, `📌 Buyurtma holati:\n\n${order.status}`);
     }
 
-    res.redirect(req.headers.referer || "/admin");
+    res.redirect(req.headers.referer || `/admin?pass=${req.query.pass}`);
   });
 }
 
