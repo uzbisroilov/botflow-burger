@@ -1,3 +1,4 @@
+const { getAnalytics } = require("../services/analyticsService");
 const { getOrders, updateOrderStatus } = require("../services/orderService");
 const { getMenus, updateMenuItem, deleteMenuItem } = require("../services/menuService");
 
@@ -207,9 +208,34 @@ function adminRoutes(app, bot) {
     const pass = req.query.pass;
     const orders = await getOrders();
     const a = analytics(orders);
+    const advanced = getAnalytics(orders);
 
     const body = `
-<div class="cards">
+<div class="panel">
+  <h2>📊 Advanced Analytics</h2>
+
+  <div class="cards">
+    <div class="card">📈 Today Revenue<br><br><b>${money(advanced.todayRevenue)}</b></div>
+    <div class="card">🛒 Today Orders<br><br><b>${advanced.todayOrders}</b></div>
+    <div class="card">💰 Avg Check<br><br><b>${money(advanced.averageCheck)}</b></div>
+    <div class="card">🔥 Today Avg<br><br><b>${money(advanced.todayAverageCheck)}</b></div>
+  </div>
+
+  <h3>🏆 TOP 5 Products</h3>
+  <ol>
+    ${
+      advanced.topProducts.length
+        ? advanced.topProducts
+            .map(
+              (p) =>
+                `<li><b>${p.name}</b> — ${p.count} ta | ${money(p.revenue)}</li>`
+            )
+            .join("")
+        : "<li>Hali ma’lumot yo‘q</li>"
+    }
+  </ol>
+</div>
+    <div class="cards">
   <div class="card">🛒 Orders<br><br><b>${orders.length}</b></div>
   <div class="card">🟡 Active<br><br><b>${a.active}</b></div>
   <div class="card">🎉 Delivered<br><br><b>${a.delivered}</b></div>
